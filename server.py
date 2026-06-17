@@ -84,7 +84,13 @@ def _validate_order_link(link: str) -> bool:
         return False
     try:
         p = urlparse(link)
-        return p.scheme in ("https", "http") and p.netloc.lower() in _ALLOWED_LINK_HOSTS
+        host = p.netloc.lower()
+        if p.scheme not in ("https", "http") or host not in _ALLOWED_LINK_HOSTS:
+            return False
+        # drd.sh short-links must be cart links
+        if host == "drd.sh" and not p.path.startswith("/cart/"):
+            return False
+        return True
     except Exception:
         return False
 

@@ -611,6 +611,16 @@
   </div>
 
   <script>
+    // ── Block access outside Telegram ──
+    if (!window.Telegram?.WebApp?.initData) {
+      document.body.style.cssText = 'margin:0;background:#0e0e0e;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;';
+      document.body.innerHTML = `
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.4px;">Crave<span style="color:#FF3008;">.</span></div>
+        <div style="font-size:14px;color:#333;font-weight:500;">Access not allowed</div>
+      `;
+      throw new Error('not in Telegram');
+    }
+
     // ── HTML escape helper — always use before injecting into innerHTML ──
     function esc(s) {
       const d = document.createElement('div');
@@ -767,6 +777,13 @@
       clearTimeout(linkTimer);
       if (linkCtrl) linkCtrl.abort();
       if (!link) return;
+
+      // Quick client-side check before hitting the API
+      if (!link.startsWith('https://drd.sh/cart/')) {
+        setLinkState('link-bad', 'Link must be a DoorDash cart link (https://drd.sh/cart/...)');
+        linkEligible = false;
+        return;
+      }
 
       setLinkState('validating', 'Loading order...');
 
