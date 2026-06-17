@@ -21,7 +21,7 @@ app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64 KB max body
 
 # ── Link/order cache ──────────────────────────────────────────────────────────
 _link_cache: dict = {}
-_LINK_CACHE_TTL = 300  # 5 minutes
+_LINK_CACHE_TTL = 30  # 30 seconds — carts change frequently
 
 
 # ── Rate limiter (sliding window, in-memory per IP) ───────────────────────────
