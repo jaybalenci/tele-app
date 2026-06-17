@@ -69,7 +69,10 @@ def join_group_order(
 ) -> tuple[str, DoorDashWebSession, dict[str, Any]]:
     """Open the group-order invite so the session can read the shared cart."""
     log("group", "opening order link...")
-    cart_ref = parse_cart_reference(order_link)
+    try:
+        cart_ref = parse_cart_reference(order_link)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
     client = DoorDashWebSession(dict(cookies))
     resolved_uuid: str | None = None
     last_url = ""
@@ -112,13 +115,16 @@ def join_group_order(
     client.csrf = resolve_csrf(client.cookies)
     client.cookies["csrf_token"] = client.csrf
 
-    data = client.graphql(
-        DETAILED_CART_URL,
-        "detailedCartItems",
-        {"orderCartId": query_cart_id},
-        load_query(DETAILED_CART_QUERY),
-        referer,
-    )
+    try:
+        data = client.graphql(
+            DETAILED_CART_URL,
+            "detailedCartItems",
+            {"orderCartId": query_cart_id},
+            load_query(DETAILED_CART_QUERY),
+            referer,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Could not fetch cart: {exc}") from exc
     if data.get("errors"):
         err_msgs = " ".join(
             str(e.get("message", "")) for e in (data["errors"] or [])

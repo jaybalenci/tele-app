@@ -189,11 +189,11 @@ def validate_link():
 
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception:
+    except Exception as e:
         from core.logger import log
         import traceback
         log("validate-link", f"unexpected: {traceback.format_exc()}")
-        return jsonify({"error": "Could not load order. Check the link and try again."}), 400
+        return jsonify({"error": f"Could not load order: {e}"}), 400
 
 
 @app.route("/api/price", methods=["POST"])
@@ -274,6 +274,91 @@ def price():
         import traceback
         log("price", f"unexpected: {traceback.format_exc()}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+# ── Telegram bot (webhook mode) ───────────────────────────────────────────────
+import json as _json
+import urllib.request as _urllib_request
+
+_WEBAPP_URL = os.getenv("WEBAPP_URL", "").rstrip("/")
+_WEBHOOK_SECRET = (
+    hmac.new(b"webhook", _BOT_TOKEN.encode(), hashlib.sha256).hexdigest()[:32]
+    if _BOT_TOKEN else ""
+)
+
+
+def _tg_api(method: str, payload: dict) -> None:
+    if not _BOT_TOKEN:
+        return
+    try:
+        req = _urllib_request.Request(
+            f"https://api.telegram.org/bot{_BOT_TOKEN}/{method}",
+            data=_json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        _urllib_request.urlopen(req, timeout=10)
+    except Exception:
+        pass
+
+
+def _register_webhook() -> None:
+    if not _BOT_TOKEN or not _WEBAPP_URL:
+        return
+    webhook_url = f"{_WEBAPP_URL}/telegram"
+    try:
+        req = _urllib_request.Request(
+            f"https://api.telegram.org/bot{_BOT_TOKEN}/setWebhook",
+            data=_json.dumps({
+                "url": webhook_url,
+                "secret_token": _WEBHOOK_SECRET,
+                "allowed_updates": ["message"],
+            }).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        _urllib_request.urlopen(req, timeout=10)
+        from core.logger import log as _log
+        _log("bot", f"webhook registered → {webhook_url}")
+    except Exception as exc:
+        from core.logger import log as _log
+        _log("bot", f"webhook registration failed: {exc}")
+
+
+_register_webhook()
+
+
+@app.route("/telegram", methods=["POST"])
+def telegram_webhook():
+    if _WEBHOOK_SECRET and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != _WEBHOOK_SECRET:
+        return "", 403
+
+    data = request.get_json(force=True, silent=True) or {}
+    message = data.get("message") or {}
+    text = (message.get("text") or "").strip()
+    chat_id = (message.get("chat") or {}).get("id")
+
+    if not chat_id:
+        return "ok"
+
+    if text.startswith("/start"):
+        _tg_api("sendMessage", {
+            "chat_id": chat_id,
+            "text": "Welcome to Crave! Tap the button below to open the app.",
+            "reply_markup": {
+                "inline_keyboard": [[{
+                    "text": "Open Crave",
+                    "web_app": {"url": f"{_WEBAPP_URL}/"}
+                }]]
+            },
+        })
+    elif text.startswith("/help"):
+        _tg_api("sendMessage", {
+            "chat_id": chat_id,
+            "text": "/start — Open the app\n/help — Show this message",
+        })
+
+    return "ok"
 
 
 if __name__ == "__main__":
