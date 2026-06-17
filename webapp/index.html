@@ -402,65 +402,17 @@
       min-height: 0;
     }
 
-    /* Split card: store left, pricing right */
-    .result-split {
-      display: flex;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-
-    .split-left {
-      flex: 1;
-      padding: 12px 12px;
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-width: 0;
-    }
-
     .store-name {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
       letter-spacing: -0.3px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .store-address {
-      font-size: 10px;
-      color: #444;
-      margin-top: 3px;
-      line-height: 1.4;
-    }
-
-    .split-right {
-      width: 140px;
-      flex-shrink: 0;
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 3px;
-    }
-
-    .mini-price-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       font-size: 11px;
+      color: #444;
+      margin-top: 2px;
     }
-
-    .mini-price-row .label { color: #484848; }
-    .mini-price-row .value { color: #999; }
-    .mini-price-row.total-row { margin-top: 4px; padding-top: 4px; border-top: 1px solid #222; }
-    .mini-price-row.total-row .label { color: #888; font-weight: 600; }
-    .mini-price-row.total-row .value { color: #fff; font-weight: 700; font-size: 13px; }
-    .mini-price-row.discount-row .value { color: #2ecc71; }
 
     .section-title {
       font-size: 10px;
@@ -1029,49 +981,39 @@
         ? `<a class="purchase-btn" href="${esc(safeCheckout)}" target="_blank" rel="noopener noreferrer">Purchase</a>`
         : '';
 
-      const discountMiniRow = hasDiscount ? `
-        <div class="mini-price-row discount-row">
-          <span class="label">Discount</span>
-          <span class="value">${esc(data.pricing.discounts)}</span>
-        </div>` : '';
-
-      const tipDisplay = data.pricing.tip || 'None';
-      const tipColor = data.pricing.tip ? '' : 'color:#333';
-
       body.innerHTML = `
-        <div class="result-split">
-          <div class="split-left">
-            <div class="store-name">${esc(data.store)}</div>
-            <div class="store-address">${esc(data.address)}</div>
-          </div>
-          <div class="split-right">
-            <div class="mini-price-row">
-              <span class="label">Subtotal</span>
-              <span class="value">${esc(data.pricing.subtotal)}</span>
-            </div>
-            <div class="mini-price-row">
-              <span class="label">Delivery</span>
-              <span class="value">${freeDelivery ? '<span style="color:#2ecc71">Free</span>' : esc(data.pricing.delivery)}</span>
-            </div>
-            <div class="mini-price-row">
-              <span class="label">Fees & Tax</span>
-              <span class="value">${esc(data.pricing.fees_tax)}</span>
-            </div>
-            ${discountMiniRow}
-            <div class="mini-price-row">
-              <span class="label">Tip</span>
-              <span class="value" style="${tipColor}">${esc(tipDisplay)}</span>
-            </div>
-            <div class="mini-price-row total-row">
-              <span class="label">Total</span>
-              <span class="value">${esc(data.pricing.total)}</span>
-            </div>
-          </div>
+        <div>
+          <div class="store-name">${esc(data.store)}</div>
+          <div class="store-address">${esc(data.address)}</div>
         </div>
 
         <div>
           <div class="section-title">Items</div>
           <div class="items-grid">${itemsHtml}</div>
+        </div>
+
+        <div>
+          <div class="section-title">Pricing</div>
+          <div class="pricing-card">
+            <div class="price-row">
+              <span class="label">Subtotal</span>
+              <span class="value">${esc(data.pricing.subtotal)}</span>
+            </div>
+            <div class="price-row">
+              <span class="label">Delivery</span>
+              <span class="value">${deliveryDisplay}</span>
+            </div>
+            <div class="price-row">
+              <span class="label">Fees & Tax</span>
+              <span class="value">${esc(data.pricing.fees_tax)}</span>
+            </div>
+            ${discountRow}
+            <div class="price-row">
+              <span class="label">Tip</span>
+              <span class="value" style="${data.pricing.tip ? '' : 'color:#444'}">${data.pricing.tip ? esc(data.pricing.tip) : 'None'}</span>
+            </div>
+            ${totalRow}
+          </div>
         </div>
 
         ${savingsBadge}
