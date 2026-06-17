@@ -1,0 +1,93 @@
+query groupCart($id: ID!, $shouldApplyAutocheckoutConfig: Boolean, $corporateIndividualOrdersEnabled: Boolean) {
+  orderCart(
+    id: $id
+    shouldApplyAutocheckoutConfig: $shouldApplyAutocheckoutConfig
+    corporateIndividualOrdersEnabled: $corporateIndividualOrdersEnabled
+  ) {
+    id
+    cartType
+    groupCart
+    groupCartType
+    groupCartSource
+    cartStatusType
+    subtotal
+    total
+    currencyCode
+    urlCode
+    shortenedUrl
+    isBundle
+    bundleType
+    menu {
+      id
+      name
+    }
+    creator {
+      id
+      firstName
+      lastName
+    }
+    restaurant {
+      id
+      name
+      slug
+      address {
+        printableAddress
+        street
+        lat
+        lng
+      }
+    }
+    lineItemsList {
+      chargeId
+      label
+      finalMoney {
+        displayString
+        unitAmount
+        currency
+      }
+    }
+    orders {
+      id
+      isSubCartFinalized
+      consumer {
+        id
+        firstName
+        lastName
+      }
+      orderItems {
+        id
+        quantity
+        priceDisplayString
+        specialInstructions
+        substitutionPreference
+        singlePrice
+        nestedOptions
+        item {
+          id
+          name
+          price
+          storeId
+          description
+          imageUrl
+        }
+        options {
+          id
+          name
+          quantity
+        }
+      }
+    }
+    groupCartPreCheckoutDetails {
+      deliveryAddress {
+        printableAddress
+        street
+        city
+        state
+        zipCode
+      }
+      dasherTipPercentage
+      scheduledWindowStart
+      scheduledWindowEnd
+    }
+  }
+}

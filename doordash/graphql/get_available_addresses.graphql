@@ -1,0 +1,15 @@
+query getAvailableAddresses {
+  getAvailableAddresses {
+    id
+    addressId
+    street
+    city
+    state
+    zipCode
+    lat
+    lng
+    printableAddress
+    shortname
+    __typename
+  }
+}

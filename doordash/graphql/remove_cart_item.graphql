@@ -1,0 +1,24 @@
+mutation removeCartItem(
+  $cartId: ID!
+  $itemId: ID!
+  $returnCartFromOrderService: Boolean
+  $monitoringContext: MonitoringContextInput
+  $cartContext: CartContextInput
+  $cartFilter: CartFilter
+) {
+  removeCartItemV2(
+    cartId: $cartId
+    itemId: $itemId
+    returnCartFromOrderService: $returnCartFromOrderService
+    monitoringContext: $monitoringContext
+    cartContext: $cartContext
+    cartFilter: $cartFilter
+  ) {
+    id
+    orders {
+      orderItems {
+        id
+      }
+    }
+  }
+}

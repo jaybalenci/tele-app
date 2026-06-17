@@ -1,0 +1,19 @@
+mutation updateConsumerDefaultAddressV2($defaultAddressId: ID!) {
+  updateConsumerDefaultAddressV2(defaultAddressId: $defaultAddressId) {
+    defaultAddress {
+      id
+      addressId
+      printableAddress
+      shortname
+      zipCode
+      lat
+      lng
+      __typename
+    }
+    orderCart {
+      id
+      __typename
+    }
+    __typename
+  }
+}

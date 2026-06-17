@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Crave</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: none; }
+    *::-webkit-scrollbar { display: none; }
+
+    :root {
+      --red: #FF3008;
+      --red-dim: rgba(255, 48, 8, 0.10);
+      --red-border: rgba(255, 48, 8, 0.28);
+      --bg: #0e0e0e;
+      --card: #181818;
+      --border: #242424;
+      --label: #3a3a3a;
+      --placeholder: #2a2a2a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .screen.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* ── Shared header ── */
+    header {
+      padding: 16px 16px 14px;
+      flex-shrink: 0;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .balance-widget {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: #181818;
+      border: 1px solid #262626;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .balance-info {
+      padding: 6px 12px;
+    }
+
+    .balance-label {
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #3a3a3a;
+      line-height: 1;
+    }
+
+    .balance-amount {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.4px;
+      line-height: 1.3;
+    }
+
+    .balance-add {
+      width: 36px;
+      align-self: stretch;
+      background: #1f1f1f;
+      border-left: 1px solid #262626;
+      color: #555;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+
+    .balance-add:active { opacity: 0.6; }
+
+    .header-title {
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+
+    header h1 span { color: var(--red); }
+
+    header p {
+      font-size: 12px;
+      color: #3a3a3a;
+      margin-top: 2px;
+    }
+
+    /* ── Form screen ── */
+    .form {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 14px 14px;
+      min-height: 0;
+    }
+
+    .input-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 13px;
+      transition: border-color 0.2s;
+    }
+
+    .input-card:focus-within { border-color: #303030; }
+    .input-card.error { border-color: #5a1a1a; }
+
+    .card-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: var(--label);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .req-dot {
+      width: 4px;
+      height: 4px;
+      background: var(--red);
+      border-radius: 50%;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    input::placeholder, textarea::placeholder { color: var(--placeholder); }
+
+    .error-text {
+      font-size: 10px;
+      color: var(--red);
+      margin-top: 4px;
+      display: none;
+    }
+
+    .error .error-text { display: block; }
+
+    .tip-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tip-row .card-label { margin: 0; white-space: nowrap; flex-shrink: 0; width: 22px; }
+
+    .tip-chips { display: flex; gap: 5px; flex: 1; }
+
+    .chip {
+      flex: 1;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #3a3a3a;
+      cursor: pointer;
+      transition: all 0.12s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .chip.active {
+      background: var(--red-dim);
+      border-color: var(--red-border);
+      color: var(--red);
+    }
+
+    .tip-custom {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+      width: 60px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #111;
+      padding: 7px;
+    }
+
+    .tip-custom span { font-size: 11px; color: #3a3a3a; }
+    .tip-custom input { font-size: 11px; color: #aaa; }
+    .tip-custom input::placeholder { color: #282828; }
+
+    .note-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .note-card textarea {
+      flex: 1;
+      min-height: 0;
+      resize: none;
+      line-height: 1.5;
+    }
+
+    .submit-btn {
+      width: 100%;
+      background: var(--red);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s, color 0.2s, opacity 0.15s;
+      letter-spacing: -0.2px;
+    }
+
+    .submit-btn:active:not(:disabled) { opacity: 0.8; }
+
+    .submit-btn:disabled {
+      background: #1c1c1c;
+      color: #333;
+      cursor: not-allowed;
+    }
+
+    /* Link card validation states */
+    .link-status {
+      font-size: 11px;
+      margin-top: 5px;
+      display: none;
+    }
+    #card-link.validating .link-status { display: block; color: #444; }
+    #card-link.link-ok .link-status    { display: block; color: #2e7d32; }
+    #card-link.link-bad .link-status   { display: block; color: var(--red); }
+
+    /* Sub-fields row (apt + gate) */
+    .sub-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .sub-row .input-card {
+      flex: 1;
+    }
+
+    /* ── Loading screen ── */
+    #screen-loading {
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 2px solid #222;
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-label {
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* ── Results screen ── */
+    #screen-results {
+      overflow: hidden;
+    }
+
+    #screen-results header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 14px 12px;
+    }
+
+    .back-arrow {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-size: 16px;
+      color: #888;
+    }
+
+    .back-arrow:active { opacity: 0.6; }
+
+    .results-body {
+      flex: 1;
+      padding: 0 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .store-name {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .store-address {
+      font-size: 11px;
+      color: #444;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    /* Items grid */
+    .items-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .item-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .item-img {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #1e1e1e;
+    }
+
+    .item-img-placeholder {
+      width: 60px;
+      height: 60px;
+      flex-shrink: 0;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .item-info {
+      flex: 1;
+      padding: 10px 12px 10px 0;
+    }
+
+    .item-name {
+      font-size: 13px;
+      color: #ccc;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .item-qty {
+      font-size: 11px;
+      color: #444;
+      margin-top: 2px;
+    }
+
+    /* Pricing */
+    .pricing-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 13px;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 13px;
+    }
+
+    .price-row:last-child { border-bottom: none; }
+    .price-row .label { color: #555; }
+    .price-row .value { color: #ccc; }
+    .price-row.total { background: #111; }
+    .price-row.total .label { color: #888; font-weight: 600; }
+    .price-row.total .value { color: #fff; font-weight: 700; font-size: 15px; }
+    .price-row.discount .value { color: #2ecc71; }
+
+    /* Purchase button */
+    .purchase-btn {
+      width: 100%;
+      background: var(--red);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+    }
+
+    .purchase-btn:active { opacity: 0.8; }
+
+    .error-banner {
+      background: #1a0a0a;
+      border: 1px solid #3a1010;
+      border-radius: 10px;
+      padding: 14px 13px;
+      font-size: 13px;
+      color: #c0504d;
+      line-height: 1.5;
+    }
+
+    /* ── Address autocomplete dropdown ── */
+    #card-address { position: relative; overflow: visible; }
+
+    .autocomplete-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 200;
+    }
+
+    .autocomplete-dropdown.open { display: block; }
+
+    .autocomplete-option {
+      padding: 10px 13px;
+      cursor: pointer;
+      border-bottom: 1px solid #222;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .autocomplete-option:last-child { border-bottom: none; }
+    .autocomplete-option.focused,
+    .autocomplete-option:active { background: #242424; }
+
+    .opt-label { font-size: 13px; color: #ddd; font-weight: 500; }
+    .opt-desc  { font-size: 11px; color: #555; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- Form -->
+  <div class="screen active" id="screen-form">
+    <header>
+      <div class="header-top">
+        <div>
+          <h1>Crave<span>.</span></h1>
+          </div>
+        <div class="balance-widget">
+          <div class="balance-info">
+            <div class="balance-label">Balance</div>
+            <div class="balance-amount">$0.00</div>
+          </div>
+          <div class="balance-add" onclick="">+</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="form">
+      <div class="input-card" id="card-link">
+        <div class="card-label">Group order link <span class="req-dot"></span></div>
+        <input id="input-link" type="url" placeholder="Paste DoorDash group link" autocomplete="off" autocorrect="off" spellcheck="false" />
+        <div class="link-status" id="link-status"></div>
+        <div class="error-text">Required</div>
+      </div>
+
+      <div class="input-card" id="card-address">
+        <div class="card-label">Delivery address <span class="req-dot"></span></div>
+        <input id="input-address" type="text" placeholder="123 Main St, City, State" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <div class="error-text">Required</div>
+        <div class="autocomplete-dropdown" id="address-dropdown"></div>
+      </div>
+
+      <div class="sub-row">
+        <div class="input-card">
+          <div class="card-label">Apt / Unit <span style="color:#282828;text-transform:none;letter-spacing:0;font-size:9px;font-weight:400;">optional</span></div>
+          <input id="input-apt" type="text" placeholder="Apt 4B" autocomplete="off" />
+        </div>
+        <div class="input-card">
+          <div class="card-label">Gate code <span style="color:#282828;text-transform:none;letter-spacing:0;font-size:9px;font-weight:400;">optional</span></div>
+          <input id="input-gate" type="text" placeholder="#1234" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="input-card">
+        <div class="tip-row">
+          <div class="card-label">Tip</div>
+          <div class="tip-chips">
+            <div class="chip" data-val="0">None</div>
+            <div class="chip" data-val="15">15%</div>
+            <div class="chip" data-val="20">20%</div>
+            <div class="chip" data-val="25">25%</div>
+          </div>
+          <div class="tip-custom">
+            <span>$</span>
+            <input id="input-tip" type="number" min="0" step="0.01" placeholder="—" />
+          </div>
+        </div>
+      </div>
+
+      <div class="input-card note-card">
+        <div class="card-label">Note <span style="color:#282828;text-transform:none;letter-spacing:0;font-size:9px;font-weight:400;">optional</span></div>
+        <textarea id="input-note" placeholder="Special instructions..."></textarea>
+      </div>
+
+      <button class="submit-btn" id="submit-btn" onclick="submitForm()" disabled>Check Price</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="screen" id="screen-loading">
+    <div class="spinner"></div>
+    <div class="loading-label" id="loading-label">Checking order...</div>
+  </div>
+
+  <!-- Results -->
+  <div class="screen" id="screen-results">
+    <header>
+      <div class="back-arrow" onclick="showScreen('screen-form')">&#8592;</div>
+      <div>
+        <h1>Crave<span>.</span></h1>
+        <p>Price breakdown</p>
+      </div>
+    </header>
+
+    <div class="results-body" id="results-body">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <script>
+    // ── HTML escape helper — always use before injecting into innerHTML ──
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = String(s ?? '');
+      return d.innerHTML;
+    }
+
+    // Telegram initData for API auth — sent with every request
+    const INIT_DATA = window.Telegram?.WebApp?.initData || '';
+
+    // ── Address autocomplete (proxied through backend — no API keys in frontend) ──
+    (function () {
+      const input    = document.getElementById('input-address');
+      const dropdown = document.getElementById('address-dropdown');
+      let timer   = null;
+      let ctrl    = null;
+      let opts    = [];
+      let focus   = -1;
+      let picking = false;
+
+      function render(items) {
+        opts  = items;
+        focus = -1;
+        dropdown.innerHTML = '';
+        items.forEach((o, i) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'autocomplete-option';
+          wrap.dataset.idx = i;
+          const lbl = document.createElement('div');
+          lbl.className = 'opt-label';
+          lbl.textContent = o.label;
+          wrap.appendChild(lbl);
+          if (o.description) {
+            const dsc = document.createElement('div');
+            dsc.className = 'opt-desc';
+            dsc.textContent = o.description;
+            wrap.appendChild(dsc);
+          }
+          wrap.addEventListener('mousedown', e => { e.preventDefault(); pick(opts[i].value); });
+          dropdown.appendChild(wrap);
+        });
+        dropdown.classList.add('open');
+      }
+
+      function close() {
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+        opts = []; focus = -1;
+      }
+
+      function pick(val) {
+        picking = true;
+        clearTimeout(timer);
+        if (ctrl) { ctrl.abort(); ctrl = null; }
+        input.value = val;
+        close();
+        document.getElementById('card-address').classList.remove('error');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        picking = false;
+      }
+
+      function setFocus(i) {
+        dropdown.querySelectorAll('.autocomplete-option').forEach(el => el.classList.remove('focused'));
+        focus = i;
+        if (i >= 0) dropdown.querySelectorAll('.autocomplete-option')[i].classList.add('focused');
+      }
+
+      input.addEventListener('input', () => {
+        if (picking) return;
+        const q = input.value.trim();
+        clearTimeout(timer);
+        if (ctrl) ctrl.abort();
+        if (q.length < 3) { close(); return; }
+        timer = setTimeout(async () => {
+          ctrl = new AbortController();
+          try {
+            const r = await fetch('/api/address-autocomplete?q=' + encodeURIComponent(q), { signal: ctrl.signal });
+            const items = await r.json();
+            Array.isArray(items) && items.length ? render(items) : close();
+          } catch (e) { if (e.name !== 'AbortError') close(); }
+        }, 150);
+      });
+
+      input.addEventListener('keydown', e => {
+        if (!dropdown.classList.contains('open')) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); setFocus((focus + 1) % opts.length); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); setFocus((focus - 1 + opts.length) % opts.length); }
+        else if (e.key === 'Enter' && focus >= 0) { e.preventDefault(); pick(opts[focus].value); }
+        else if (e.key === 'Escape') close();
+      });
+
+      input.addEventListener('blur', () => setTimeout(close, 150));
+    })();
+
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // Tip chips
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        document.getElementById('input-tip').value = '';
+      });
+    });
+
+    document.getElementById('input-tip').addEventListener('input', () => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    });
+
+    // ── Button gating + link pre-load ──
+    const submitBtn   = document.getElementById('submit-btn');
+    const linkInput   = document.getElementById('input-link');
+    const addrInput   = document.getElementById('input-address');
+    const linkCard    = document.getElementById('card-link');
+    const linkStatus  = document.getElementById('link-status');
+
+    let linkEligible  = false;
+    let addrFilled    = false;
+    let linkTimer     = null;
+    let linkCtrl      = null;
+
+    function refreshBtn() {
+      submitBtn.disabled = !(linkEligible && addrFilled);
+    }
+
+    function setLinkState(state, msg) {
+      linkCard.classList.remove('validating', 'link-ok', 'link-bad');
+      if (state) linkCard.classList.add(state);
+      linkStatus.textContent = msg || '';
+    }
+
+    addrInput.addEventListener('input', () => {
+      addrFilled = addrInput.value.trim().length > 0;
+      refreshBtn();
+    });
+
+    // Also mark address filled when autocomplete picks a value
+    const _origPick = window.__addrPick;  // patched below by autocomplete IIFE
+    linkInput.addEventListener('input', () => {
+      const link = linkInput.value.trim();
+      linkEligible = false;
+      setLinkState(null);
+      refreshBtn();
+
+      clearTimeout(linkTimer);
+      if (linkCtrl) linkCtrl.abort();
+      if (!link) return;
+
+      setLinkState('validating', 'Loading order...');
+
+      linkTimer = setTimeout(async () => {
+        linkCtrl = new AbortController();
+        try {
+          const r = await fetch('/api/validate-link?link=' + encodeURIComponent(link), {
+            signal: linkCtrl.signal,
+            headers: { 'X-Telegram-Init-Data': INIT_DATA },
+          });
+          const d = await r.json();
+
+          if (d.error) {
+            setLinkState('link-bad', d.error.slice(0, 70));
+            linkEligible = false;
+          } else if (!d.eligible) {
+            setLinkState('link-bad', `${d.store} · ${d.subtotal_display} — subtotal must be $15–$25`);
+            linkEligible = false;
+          } else {
+            setLinkState('link-ok', `${d.store} · ${d.subtotal_display}`);
+            linkEligible = true;
+          }
+        } catch (e) {
+          if (e.name !== 'AbortError') setLinkState('link-bad', 'Could not load link');
+        }
+        refreshBtn();
+      }, 400);
+    });
+
+    async function submitForm() {
+      const link     = document.getElementById('input-link').value.trim();
+      const address  = document.getElementById('input-address').value.trim();
+      const apt      = document.getElementById('input-apt').value.trim();
+      const gate     = document.getElementById('input-gate').value.trim();
+      const tipInput = document.getElementById('input-tip').value.trim();
+      const active   = document.querySelector('.chip.active');
+      const note     = document.getElementById('input-note').value.trim();
+
+      let valid = true;
+      const cl = document.getElementById('card-link');
+      const ca = document.getElementById('card-address');
+
+      if (!link)    { cl.classList.add('error'); valid = false; } else cl.classList.remove('error');
+      if (!address) { ca.classList.add('error'); valid = false; } else ca.classList.remove('error');
+      if (!valid) return;
+
+      const tip = tipInput ? `$${parseFloat(tipInput).toFixed(2)}` : active ? `${active.dataset.val}%` : 'none';
+
+      showScreen('screen-loading');
+
+      try {
+        const res = await fetch('/api/price', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': INIT_DATA,
+          },
+          body: JSON.stringify({ link, address, apt, gate, tip, note }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          showResults(null, data.error || 'Something went wrong.');
+        } else {
+          showResults(data, null);
+        }
+      } catch (err) {
+        showResults(null, 'Could not reach the server. Make sure the bot is running.');
+      }
+    }
+
+    function showResults(data, error) {
+      const body = document.getElementById('results-body');
+
+      if (error) {
+        body.innerHTML = '';
+        const banner = document.createElement('div');
+        banner.className = 'error-banner';
+        banner.textContent = error;
+        body.appendChild(banner);
+        showScreen('screen-results');
+        return;
+      }
+
+      function parseMoney(str) {
+        return parseFloat((str || '0').replace(/[^0-9.-]/g, '')) || 0;
+      }
+
+      const itemsHtml = data.items.length
+        ? data.items.map(i => {
+            const safeImg = i.img && /^https:\/\//.test(i.img) ? i.img : '';
+            const imgEl = safeImg
+              ? `<img class="item-img" src="${esc(safeImg)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="item-img-placeholder" style="display:none">🍔</div>`
+              : `<div class="item-img-placeholder">🍔</div>`;
+            return `
+              <div class="item-card">
+                ${imgEl}
+                <div class="item-info">
+                  <div class="item-name">${esc(i.name)}</div>
+                  ${i.qty > 1 ? `<div class="item-qty">×${esc(i.qty)}</div>` : ''}
+                </div>
+              </div>`;
+          }).join('')
+        : `<div class="item-card"><div class="item-info"><div class="item-name" style="color:#444">No items found</div></div></div>`;
+
+      const hasDiscount = !!data.pricing.original_total;
+      const discountVal = Math.abs(parseMoney(data.pricing.discounts));
+      const fmt = v => '$' + v.toFixed(2);
+      const freeDelivery = parseMoney(data.pricing.delivery) === 0;
+      const DELIVERY_RETAIL = 2.99;
+      const totalSaved = discountVal + (freeDelivery ? DELIVERY_RETAIL : 0);
+
+      const discountRow = hasDiscount ? `
+        <div class="price-row discount">
+          <span class="label">Discount</span>
+          <span class="value">${esc(data.pricing.discounts)}</span>
+        </div>` : '';
+
+      const deliveryDisplay = freeDelivery
+        ? `<s style="color:#444;font-size:12px;font-weight:400;margin-right:4px;">${fmt(DELIVERY_RETAIL)}</s>${esc(data.pricing.delivery)}`
+        : esc(data.pricing.delivery);
+
+      const totalRow = `
+        <div class="price-row total">
+          <span class="label">Total</span>
+          <span class="value">
+            ${hasDiscount ? `<span style="text-decoration:line-through;color:#444;font-size:12px;font-weight:400;margin-right:6px;">${esc(data.pricing.original_total)}</span>` : ''}
+            ${esc(data.pricing.total)}
+          </span>
+        </div>`;
+
+      const savingsBadge = (hasDiscount || freeDelivery) ? `
+        <div style="background:#0d1f0f;border:1px solid #1a3a1f;border-radius:10px;padding:10px 13px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12px;color:#4caf50;font-weight:600;">You saved</span>
+          <span style="font-size:14px;color:#4caf50;font-weight:700;">${fmt(totalSaved)}</span>
+        </div>` : '';
+
+      const safeCheckout = data.checkout_url && /^https:\/\/www\.doordash\.com\//.test(data.checkout_url)
+        ? data.checkout_url : '';
+      const purchaseBtn = safeCheckout
+        ? `<a class="purchase-btn" href="${esc(safeCheckout)}" target="_blank" rel="noopener noreferrer">Purchase</a>`
+        : '';
+
+      body.innerHTML = `
+        <div>
+          <div class="store-name">${esc(data.store)}</div>
+          <div class="store-address">${esc(data.address)}</div>
+        </div>
+
+        <div>
+          <div class="section-title">Items</div>
+          <div class="items-grid">${itemsHtml}</div>
+        </div>
+
+        <div>
+          <div class="section-title">Pricing</div>
+          <div class="pricing-card">
+            <div class="price-row">
+              <span class="label">Subtotal</span>
+              <span class="value">${esc(data.pricing.subtotal)}</span>
+            </div>
+            <div class="price-row">
+              <span class="label">Delivery</span>
+              <span class="value">${deliveryDisplay}</span>
+            </div>
+            <div class="price-row">
+              <span class="label">Fees & Tax</span>
+              <span class="value">${esc(data.pricing.fees_tax)}</span>
+            </div>
+            ${discountRow}
+            <div class="price-row">
+              <span class="label">Tip</span>
+              <span class="value" style="${data.pricing.tip ? '' : 'color:#444'}">${data.pricing.tip ? esc(data.pricing.tip) : 'None'}</span>
+            </div>
+            ${totalRow}
+          </div>
+        </div>
+
+        ${savingsBadge}
+        ${purchaseBtn}
+      `;
+
+      showScreen('screen-results');
+    }
+  </script>
+</body>
+</html>

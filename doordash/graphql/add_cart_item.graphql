@@ -1,0 +1,48 @@
+mutation addCartItem(
+  $addCartItemInput: AddCartItemInput!
+  $fulfillmentContext: FulfillmentContextInput!
+  $cartContext: CartContextInput
+  $returnCartFromOrderService: Boolean
+  $monitoringContext: MonitoringContextInput
+  $shouldKeepOnlyOneActiveCart: Boolean
+) {
+  addCartItemV2(
+    addCartItemInput: $addCartItemInput
+    fulfillmentContext: $fulfillmentContext
+    cartContext: $cartContext
+    returnCartFromOrderService: $returnCartFromOrderService
+    monitoringContext: $monitoringContext
+    shouldKeepOnlyOneActiveCart: $shouldKeepOnlyOneActiveCart
+  ) {
+    id
+    subtotal
+    total
+    currencyCode
+    shortenedUrl
+    restaurant {
+      id
+      name
+      slug
+    }
+    menu {
+      id
+    }
+    orders {
+      id
+      orderItems {
+        id
+        quantity
+        priceDisplayString
+        item {
+          id
+          name
+        }
+        options {
+          id
+          name
+          quantity
+        }
+      }
+    }
+  }
+}

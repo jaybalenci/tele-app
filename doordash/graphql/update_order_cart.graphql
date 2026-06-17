@@ -1,0 +1,9 @@
+mutation updateGroupCart($input: UpdateGroupCartInput!) {
+  updateGroupCart(input: $input) {
+    id
+    groupCartPreCheckoutDetails {
+      dasherTipPercentage
+    }
+    __typename
+  }
+}

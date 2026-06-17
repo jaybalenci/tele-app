@@ -1,0 +1,51 @@
+mutation addConsumerAddressV2(
+  $lat: Float!
+  $lng: Float!
+  $city: String!
+  $state: String!
+  $zipCode: String!
+  $printableAddress: String!
+  $shortname: String!
+  $googlePlaceId: String!
+  $subpremise: String
+  $driverInstructions: String
+  $dropoffOptionId: String
+  $manualLat: Float
+  $manualLng: Float
+  $addressLinkType: AddressLinkType
+  $buildingName: String
+  $entryCode: String
+  $addressId: String
+) {
+  addConsumerAddressV2(
+    lat: $lat
+    lng: $lng
+    city: $city
+    state: $state
+    zipCode: $zipCode
+    printableAddress: $printableAddress
+    shortname: $shortname
+    googlePlaceId: $googlePlaceId
+    subpremise: $subpremise
+    driverInstructions: $driverInstructions
+    dropoffOptionId: $dropoffOptionId
+    manualLat: $manualLat
+    manualLng: $manualLng
+    addressLinkType: $addressLinkType
+    buildingName: $buildingName
+    entryCode: $entryCode
+    addressId: $addressId
+  ) {
+    defaultAddress {
+      id
+      addressId
+      printableAddress
+      shortname
+      zipCode
+      lat
+      lng
+      __typename
+    }
+    __typename
+  }
+}

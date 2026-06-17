@@ -1,0 +1,44 @@
+query itemPage(
+  $storeId: ID!
+  $itemId: ID!
+  $isMerchantPreview: Boolean
+  $isNested: Boolean!
+  $fulfillmentType: FulfillmentType
+) {
+  itemPage(
+    storeId: $storeId
+    itemId: $itemId
+    isMerchantPreview: $isMerchantPreview
+    fulfillmentType: $fulfillmentType
+  ) {
+    itemHeader {
+      name
+      description
+      unitAmount
+    }
+    optionLists {
+      id
+      name
+      isOptional
+      minNumOptions
+      maxNumOptions
+      options {
+        id
+        name
+        unitAmount
+        nestedExtrasList {
+          id
+          name
+          isOptional
+          minNumOptions
+          maxNumOptions
+          options {
+            id
+            name
+            unitAmount
+          }
+        }
+      }
+    }
+  }
+}

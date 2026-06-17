@@ -1,0 +1,36 @@
+query checkout($orderCartId: ID!, $shouldApplyCredits: Boolean) {
+  orderCart(id: $orderCartId, shouldApplyCredits: $shouldApplyCredits) {
+    id
+    subtotal
+    total
+    totalBeforeDiscountsAndCredits
+    currencyCode
+    lineItemsList {
+      chargeId
+      label
+      finalMoney {
+        unitAmount
+        displayString
+        __typename
+      }
+      __typename
+    }
+    orders {
+      orderItems {
+        quantity
+        item {
+          name
+          imageUrl
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    restaurant {
+      name
+      __typename
+    }
+    __typename
+  }
+}

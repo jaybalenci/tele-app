@@ -1,0 +1,17 @@
+query listDetailedCarts($input: ListDetailedCartsInput!) {
+  listDetailedCarts(input: $input) {
+    detailedCarts {
+      cart {
+        id
+        restaurant {
+          id
+        }
+        orders {
+          orderItems {
+            id
+          }
+        }
+      }
+    }
+  }
+}

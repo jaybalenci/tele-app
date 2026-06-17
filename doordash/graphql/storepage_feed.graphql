@@ -1,0 +1,18 @@
+query storepageFeed($storeId: ID!, $isMerchantPreview: Boolean) {
+  storepageFeed(storeId: $storeId, isMerchantPreview: $isMerchantPreview) {
+    menuBook {
+      id
+    }
+    itemLists {
+      name
+      items {
+        id
+        name
+        quickAddContext {
+          isEligible
+          nestedOptions
+        }
+      }
+    }
+  }
+}

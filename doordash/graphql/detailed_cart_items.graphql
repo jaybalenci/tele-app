@@ -1,0 +1,51 @@
+query detailedCartItems($orderCartId: ID!) {
+  orderCart(id: $orderCartId) {
+    id
+    subtotal
+    total
+    currencyCode
+    isBundle
+    bundleType
+    menu {
+      id
+      name
+    }
+    restaurant {
+      id
+      name
+      slug
+    }
+    orders {
+      id
+      orderItems {
+        id
+        quantity
+        specialInstructions
+        substitutionPreference
+        singlePrice
+        nestedOptions
+        item {
+          id
+          name
+          price
+          storeId
+          description
+          extras {
+            id
+            title
+            options {
+              id
+              name
+            }
+          }
+        }
+        options {
+          id
+          name
+          quantity
+          nestedOptions
+        }
+      }
+    }
+  }
+}
