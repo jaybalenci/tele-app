@@ -28,23 +28,18 @@ def _clear_existing_carts(
     referer: str,
 ) -> None:
     """Find and clear any active build-account carts for this store."""
-    vlog("clear_cart", f"fetching carts for store {store_id}")
     try:
         detailed = list_detailed_carts(client, referer=referer)
     except Exception as exc:
-        vlog("clear_cart", f"listDetailedCarts failed: {exc}")
+        log("clear_cart", f"listDetailedCarts failed: {exc}")
         return
 
-    vlog("clear_cart", f"{len(detailed)} active cart(s) found")
     for entry in detailed:
         cart = entry.get("cart") or {}
         cart_id = str(cart.get("id") or "")
-        restaurant = cart.get("restaurant") or {}
-        cart_store_id = str(restaurant.get("id") or "")
-        vlog("clear_cart", f"cart {cart_id[:8]}… → store {cart_store_id}")
+        cart_store_id = str((cart.get("restaurant") or {}).get("id") or "")
 
         if cart_store_id != store_id:
-            vlog("clear_cart", "skipping (different store)")
             continue
 
         item_ids = [
@@ -55,19 +50,14 @@ def _clear_existing_carts(
         ]
 
         if not item_ids:
-            vlog("clear_cart", f"cart {cart_id[:8]}… already empty")
             continue
 
-        vlog("clear_cart", f"removing {len(item_ids)} item(s) from cart {cart_id[:8]}…")
+        log("clear_cart", f"clearing {len(item_ids)} stale item(s) before rebuild...")
         for item_id in item_ids:
             try:
-                resp = remove_cart_item(client, cart_id=cart_id, item_id=item_id, referer=referer)
-                if resp.get("errors"):
-                    vlog("clear_cart", f"error removing {item_id}: {resp['errors']}")
-                else:
-                    vlog("clear_cart", f"removed {item_id} ✓")
+                remove_cart_item(client, cart_id=cart_id, item_id=item_id, referer=referer)
             except Exception as exc:
-                vlog("clear_cart", f"exception removing {item_id}: {exc}")
+                log("clear_cart", f"✗ remove {item_id}: {exc}")
 
 
 def rebuild_cart(
@@ -90,6 +80,10 @@ def rebuild_cart(
     # HTTP round-trip through the proxy that can hit the 20s timeout.
     client.csrf = resolve_csrf(client.cookies)
     client.cookies["csrf_token"] = client.csrf
+
+    store_id = str(restaurant.get("id") or "")
+    if store_id:
+        _clear_existing_carts(client, store_id, referer)
 
     _status("Adding items...")
 
