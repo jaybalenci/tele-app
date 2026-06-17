@@ -773,6 +773,8 @@
     tg.expand();
     tg.setHeaderColor('#0e0e0e');
     tg.setBackgroundColor('#0e0e0e');
+    if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+    tg.onEvent('viewportChanged', () => { if (!tg.isExpanded) tg.expand(); });
 
     function showScreen(id) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
