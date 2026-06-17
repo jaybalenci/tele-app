@@ -253,6 +253,13 @@ def run_price_order(
                     "The cart appears to be empty. Make sure the group order has items before price-checking."
                 )
 
+            rebuilt_subtotal_cents = int(rebuilt.get("subtotal") or 0)
+            if rebuilt_subtotal_cents < 1500 or rebuilt_subtotal_cents > 2500:
+                raise RuntimeError(
+                    f"Subtotal exceeded (${rebuilt_subtotal_cents / 100:.2f}). "
+                    "Cart must be between $15.00 and $25.00."
+                )
+
             lat = float(default_address.get("lat") or 0)
             lng = float(default_address.get("lng") or 0)
 
