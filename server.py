@@ -394,7 +394,7 @@ def deposit_crypto():
         "amount":        amount,
         "currency":      "USD",
         "payCurrency":   currency,
-        "lifeTime":      30,
+        "lifeTime":      120,
         "feePaidByPayer": 1,
         "callbackUrl":   callback_url,
         "description":   "Crave balance deposit",
@@ -432,7 +432,7 @@ def deposit_crypto():
         "address":       address,
         "crypto_amount": crypto_amount,
         "pay_currency":  pay_currency,
-        "expires_in":    30 * 60,
+        "expires_in":    120 * 60,
         "track_id":      track_id,
     })
 

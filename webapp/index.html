@@ -1270,9 +1270,9 @@
     // ── Payment methods config — update handles here ───────────────────────────
     const PAYMENT_METHODS = [
       { id: 'zelle',  name: 'Zelle',  desc: 'Instant bank transfer', img: '/imgs/zelle.png',  label: 'Send to', value: 'your@email.com' },
-      { id: 'venmo',  name: 'Venmo',  desc: 'Pay with Venmo',        img: '/imgs/vemmo.png',  label: 'Send to', value: '@YourVenmo' },
-      { id: 'chime',  name: 'Chime',  desc: 'Send via Chime',        img: '/imgs/chime.png',  label: 'Send to', value: '$YourChime' },
-      { id: 'crypto', name: 'Crypto', desc: 'BTC / ETH / USDT',      img: '/imgs/crypto.png', label: 'Wallet',  value: 'YourWalletAddress' },
+      { id: 'venmo',  name: 'Venmo',  desc: 'Pay with Venmo',        img: '/imgs/vemmo.png',  label: 'Send to', value: '@YourVenmo',  minAmount: 10 },
+      { id: 'chime',  name: 'Chime',  desc: 'Send via Chime',        img: '/imgs/chime.png',  label: 'Send to', value: '$YourChime',  minAmount: 10 },
+      { id: 'crypto', name: 'Crypto', desc: 'BTC / ETH / SOL / LTC', img: '/imgs/crypto.png', label: 'Wallet',  value: 'YourWalletAddress' },
     ];
 
     let _depositAmount = 0;
@@ -1316,6 +1316,20 @@
       const m = PAYMENT_METHODS.find(x => x.id === id);
       if (!m) return;
       document.getElementById('payment-back').onclick = renderPaymentMethods;
+
+      if (m.minAmount && _depositAmount < m.minAmount) {
+        const form = document.getElementById('payment-form');
+        form.innerHTML = `
+          <div class="payment-amount-display">
+            <div class="payment-amount-label">Deposit amount</div>
+            <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
+          </div>
+          <div class="error-banner">
+            ${m.name} requires a minimum deposit of $${m.minAmount.toFixed(2)}. Please go back and enter a higher amount.
+          </div>
+          <button class="submit-btn" style="background:#1c1c1c;color:#555;" onclick="renderPaymentMethods()">Go Back</button>`;
+        return;
+      }
 
       if (id === 'crypto') {
         const form = document.getElementById('payment-form');
@@ -1433,17 +1447,34 @@
       };
 
       // Countdown from remaining time
-      const expiresAt = details.expires_at || (Date.now() + (details.expires_in || 1800) * 1000);
+      const expiresAt = details.expires_at || (Date.now() + (details.expires_in || 7200) * 1000);
       function tick() {
         const el = document.getElementById('crypto-countdown');
         if (!el) return;
         const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-        const m = Math.floor(remaining / 60);
+        const h = Math.floor(remaining / 3600);
+        const m = Math.floor((remaining % 3600) / 60);
         const s = remaining % 60;
-        el.textContent = remaining > 0
-          ? 'Expires in ' + m + ':' + String(s).padStart(2, '0')
-          : 'Invoice expired';
-        if (remaining <= 0) clearInterval(_cryptoCountdown);
+        const timeStr = h > 0
+          ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+          : m + ':' + String(s).padStart(2, '0');
+        el.textContent = remaining > 0 ? 'Expires in ' + timeStr : '';
+
+        if (remaining <= 0) {
+          clearInterval(_cryptoCountdown);
+          clearCryptoSession();
+          // Hide payment details, show expiry message
+          const content = document.getElementById('crypto-pay-content');
+          if (content) {
+            content.innerHTML = `
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:300px;width:100%;padding:20px;">
+                <div style="font-size:36px;">⏳</div>
+                <div style="font-size:17px;font-weight:700;color:#ccc;">Invoice Expired</div>
+                <div style="font-size:13px;color:#555;text-align:center;line-height:1.6;">This payment request has expired.<br>Start a new deposit to generate a fresh address.</div>
+                <button class="submit-btn" style="margin-top:8px;" onclick="showScreen('screen-deposit')">Start New Deposit</button>
+              </div>`;
+          }
+        }
       }
       tick();
       _cryptoCountdown = setInterval(tick, 1000);
