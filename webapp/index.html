@@ -1292,15 +1292,18 @@
           <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
         </div>
         <div class="payment-method-list">
-          ${PAYMENT_METHODS.map(m => `
-            <div class="payment-method-card" onclick="selectPaymentMethod('${m.id}')">
+          ${PAYMENT_METHODS.map(m => {
+            const disabled = m.minAmount && _depositAmount < m.minAmount;
+            return `
+            <div class="payment-method-card" ${disabled ? '' : `onclick="selectPaymentMethod('${m.id}')"`} style="${disabled ? 'opacity:0.38;pointer-events:none;' : ''}">
               <div class="pm-icon"><img src="${m.img}" style="width:38px;height:38px;object-fit:contain;border-radius:8px;" /></div>
               <div class="pm-info">
                 <div class="pm-name">${m.name}</div>
-                <div class="pm-desc">${m.desc}</div>
+                <div class="pm-desc">${disabled ? `Minimum $${m.minAmount.toFixed(2)}` : m.desc}</div>
               </div>
-              <div class="pm-arrow">›</div>
-            </div>`).join('')}
+              <div class="pm-arrow" style="${disabled ? 'color:#222;' : ''}">›</div>
+            </div>`;
+          }).join('')}
         </div>`;
     }
 
