@@ -381,7 +381,7 @@ def deposit_crypto():
 
     chat_id = _get_chat_id_from_init_data(init_data)
 
-    _SUPPORTED_CURRENCIES = {"BTC", "ETH", "LTC", "USDT_TRC20"}
+    _SUPPORTED_CURRENCIES = {"BTC", "ETH", "LTC", "SOL"}
     currency = str(data.get("currency") or "BTC").upper().replace("-", "_")
     if currency not in _SUPPORTED_CURRENCIES:
         return jsonify({"error": "Unsupported currency."}), 400

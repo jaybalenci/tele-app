@@ -1189,8 +1189,45 @@
       } catch (_) {}
     }
 
+    // ── Crypto session (persists across app close/reopen) ──────────────────────
+    const CRYPTO_SESSION_KEY = 'crave_crypto_session';
+
+    function saveCryptoSession(s) {
+      const v = JSON.stringify(s);
+      if (tg.CloudStorage) tg.CloudStorage.setItem(CRYPTO_SESSION_KEY, v, () => {});
+      else localStorage.setItem(CRYPTO_SESSION_KEY, v);
+    }
+
+    function loadCryptoSession(cb) {
+      if (tg.CloudStorage) {
+        tg.CloudStorage.getItem(CRYPTO_SESSION_KEY, (err, v) => {
+          try { cb(v ? JSON.parse(v) : null); } catch (_) { cb(null); }
+        });
+      } else {
+        try { cb(JSON.parse(localStorage.getItem(CRYPTO_SESSION_KEY) || 'null')); }
+        catch (_) { cb(null); }
+      }
+    }
+
+    function clearCryptoSession() {
+      if (tg.CloudStorage) tg.CloudStorage.removeItem(CRYPTO_SESSION_KEY, () => {});
+      else localStorage.removeItem(CRYPTO_SESSION_KEY);
+    }
+
+    function isSessionValid(s) {
+      return !!(s && s.address && s.track_id && s.expires_at && Date.now() < s.expires_at);
+    }
+
     checkPendingCredit();
-    tg.onEvent('activated', checkPendingCredit);
+
+    // On app reopen: check for confirmed payment AND resume any active crypto poll
+    tg.onEvent('activated', () => {
+      checkPendingCredit();
+      loadCryptoSession(s => { if (isSessionValid(s)) _startCryptoPoll(); });
+    });
+
+    // On cold load: silently resume poll if a session is still live
+    loadCryptoSession(s => { if (isSessionValid(s)) _startCryptoPoll(); });
 
     // ── Deposit screen ──────────────────────────────────────────────────────────
     function openDeposit() {
@@ -1269,10 +1306,10 @@
 
     const _CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/';
     const COINS = [
-      { id: 'BTC',        name: 'Bitcoin',  symbol: 'BTC',   tag: 'BTC',   img: _CDN + 'btc.svg'  },
-      { id: 'ETH',        name: 'Ethereum', symbol: 'ETH',   tag: 'ETH',   img: _CDN + 'eth.svg'  },
-      { id: 'USDT_TRC20', name: 'USDT',     symbol: 'USDT',  tag: 'TRC20', img: _CDN + 'usdt.svg' },
-      { id: 'LTC',        name: 'Litecoin', symbol: 'LTC',   tag: 'LTC',   img: _CDN + 'ltc.svg'  },
+      { id: 'BTC', name: 'Bitcoin',  tag: 'BTC', img: _CDN + 'btc.svg', note: 'Confirmation may take up to 1 hour' },
+      { id: 'ETH', name: 'Ethereum', tag: 'ETH', img: _CDN + 'eth.svg' },
+      { id: 'SOL', name: 'Solana',   tag: 'SOL', img: _CDN + 'sol.svg' },
+      { id: 'LTC', name: 'Litecoin', tag: 'LTC', img: _CDN + 'ltc.svg' },
     ];
 
     function selectPaymentMethod(id) {
@@ -1294,6 +1331,7 @@
                 <img src="${c.img}" width="44" height="44" style="border-radius:50%;" />
                 <div class="coin-name">${c.name}</div>
                 <div class="coin-tag">${c.tag}</div>
+                ${c.note ? `<div style="font-size:9px;color:#555;text-align:center;line-height:1.3;margin-top:-2px;">${c.note}</div>` : ''}
               </div>`).join('')}
           </div>`;
         return;
@@ -1320,10 +1358,34 @@
         <button class="submit-btn" onclick="confirmPayment()">I've Sent the Payment</button>`;
     }
 
-    let _cryptoPollTimer    = null;
-    let _cryptoCountdown    = null;
+    let _cryptoPollTimer = null;
+    let _cryptoCountdown = null;
 
-    async function openNativeCryptoPayment(coinId) {
+    function _startCryptoPoll() {
+      clearInterval(_cryptoPollTimer);
+      _cryptoPollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch('/api/balance/pending', { headers: { 'X-Telegram-Init-Data': INIT_DATA } });
+          const data = await res.json();
+          if (data.pending > 0) {
+            clearInterval(_cryptoPollTimer);
+            clearInterval(_cryptoCountdown);
+            clearCryptoSession();
+            getBalance(current => {
+              setBalance(Math.round((current + data.pending) * 100) / 100, () => {
+                refreshBalanceDisplay();
+                const statusEl = document.getElementById('crypto-status-msg');
+                if (statusEl) statusEl.textContent = 'Payment confirmed!';
+                const onCryptoScreen = document.getElementById('screen-crypto-pay').classList.contains('active');
+                if (onCryptoScreen) setTimeout(() => showScreen('screen-form'), 1500);
+              });
+            });
+          }
+        } catch (_) {}
+      }, 4000);
+    }
+
+    function _renderCryptoScreen(details, coinId) {
       const coin    = COINS.find(c => c.id === coinId);
       const content = document.getElementById('crypto-pay-content');
       const titleEl = document.getElementById('crypto-pay-title');
@@ -1331,49 +1393,13 @@
 
       titleEl.textContent = (coin ? coin.name : 'Crypto') + ' Payment';
 
-      content.innerHTML = `
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:280px;width:100%;">
-          <div class="spinner"></div>
-          <div style="font-size:13px;color:#555;">Creating invoice...</div>
-        </div>`;
-
-      clearInterval(_cryptoPollTimer);
-      clearInterval(_cryptoCountdown);
-
-      closeEl.onclick = () => {
-        clearInterval(_cryptoPollTimer);
-        clearInterval(_cryptoCountdown);
-        showScreen('screen-payment');
-      };
-
-      showScreen('screen-crypto-pay');
-
-      let details;
-      try {
-        const res = await fetch('/api/deposit/crypto', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
-          body: JSON.stringify({ amount: _depositAmount, currency: coinId }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          content.innerHTML = `<div class="error-banner" style="margin-top:20px;">${esc(data.error || 'Failed to create payment.')}</div>`;
-          return;
-        }
-        details = data;
-      } catch (_) {
-        content.innerHTML = `<div class="error-banner" style="margin-top:20px;">Network error. Please try again.</div>`;
-        return;
-      }
-
       window._cryptoAddress  = details.address;
       window._cryptoAmount   = details.crypto_amount;
       window._cryptoCurrency = details.pay_currency;
 
-      // Build a scannable crypto URI so wallets auto-fill both address and amount
-      const _uriScheme = { BTC: 'bitcoin', ETH: 'ethereum', LTC: 'litecoin' };
-      const _scheme = _uriScheme[details.pay_currency];
-      const _qrData = (_scheme && details.crypto_amount)
+      const _uriScheme = { BTC: 'bitcoin', ETH: 'ethereum', LTC: 'litecoin', SOL: 'solana' };
+      const _scheme    = _uriScheme[details.pay_currency];
+      const _qrData    = (_scheme && details.crypto_amount)
         ? `${_scheme}:${details.address}?amount=${details.crypto_amount}`
         : details.address;
 
@@ -1398,39 +1424,75 @@
         <div class="crypto-status-msg" id="crypto-status-msg">Waiting for payment confirmation...</div>
       `;
 
-      // Countdown
-      let remaining = details.expires_in || 1800;
+      // Close just hides the screen — poll keeps running in background
+      closeEl.onclick = () => {
+        clearInterval(_cryptoCountdown);
+        showScreen('screen-payment');
+      };
+
+      // Countdown from remaining time
+      const expiresAt = details.expires_at || (Date.now() + (details.expires_in || 1800) * 1000);
       function tick() {
         const el = document.getElementById('crypto-countdown');
         if (!el) return;
+        const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
         const m = Math.floor(remaining / 60);
         const s = remaining % 60;
-        el.textContent = 'Expires in ' + m + ':' + String(s).padStart(2, '0');
-        remaining--;
-        if (remaining < 0) clearInterval(_cryptoCountdown);
+        el.textContent = remaining > 0
+          ? 'Expires in ' + m + ':' + String(s).padStart(2, '0')
+          : 'Invoice expired';
+        if (remaining <= 0) clearInterval(_cryptoCountdown);
       }
       tick();
       _cryptoCountdown = setInterval(tick, 1000);
 
-      // Poll for confirmation
-      _cryptoPollTimer = setInterval(async () => {
-        try {
-          const res  = await fetch('/api/balance/pending', { headers: { 'X-Telegram-Init-Data': INIT_DATA } });
-          const data = await res.json();
-          if (data.pending > 0) {
-            clearInterval(_cryptoPollTimer);
-            clearInterval(_cryptoCountdown);
-            const statusEl = document.getElementById('crypto-status-msg');
-            if (statusEl) statusEl.textContent = 'Payment confirmed!';
-            getBalance(current => {
-              setBalance(Math.round((current + data.pending) * 100) / 100, () => {
-                refreshBalanceDisplay();
-                setTimeout(() => showScreen('screen-form'), 1500);
-              });
-            });
-          }
-        } catch (_) {}
-      }, 4000);
+      showScreen('screen-crypto-pay');
+    }
+
+    async function openNativeCryptoPayment(coinId) {
+      const content = document.getElementById('crypto-pay-content');
+      const titleEl = document.getElementById('crypto-pay-title');
+      const coin    = COINS.find(c => c.id === coinId);
+      titleEl.textContent = (coin ? coin.name : 'Crypto') + ' Payment';
+
+      // Check if we already have a live session for this exact coin + amount
+      loadCryptoSession(existing => {
+        if (isSessionValid(existing) && existing.coin_id === coinId && existing.usd_amount === _depositAmount) {
+          // Resume existing invoice — no new API call needed
+          _renderCryptoScreen(existing, coinId);
+          _startCryptoPoll();
+          return;
+        }
+
+        // New invoice
+        content.innerHTML = `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:280px;width:100%;">
+            <div class="spinner"></div>
+            <div style="font-size:13px;color:#555;">Creating invoice...</div>
+          </div>`;
+        showScreen('screen-crypto-pay');
+
+        fetch('/api/deposit/crypto', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
+          body: JSON.stringify({ amount: _depositAmount, currency: coinId }),
+        })
+          .then(r => r.json().then(d => ({ ok: r.ok, d })))
+          .then(({ ok, d }) => {
+            if (!ok || d.error) {
+              content.innerHTML = `<div class="error-banner" style="margin-top:20px;">${esc(d.error || 'Failed to create payment.')}</div>`;
+              return;
+            }
+            // Save session so it survives app close
+            const expiresAt = Date.now() + (d.expires_in || 1800) * 1000;
+            saveCryptoSession({ ...d, coin_id: coinId, usd_amount: _depositAmount, expires_at: expiresAt });
+            _renderCryptoScreen({ ...d, expires_at: expiresAt }, coinId);
+            _startCryptoPoll();
+          })
+          .catch(() => {
+            content.innerHTML = `<div class="error-banner" style="margin-top:20px;">Network error. Please try again.</div>`;
+          });
+      });
     }
 
     function _copyToClipboard(text, btnId, defaultLabel) {
