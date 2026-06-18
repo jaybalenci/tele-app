@@ -151,6 +151,11 @@ def index():
     return send_from_directory("webapp", "index.html")
 
 
+@app.route("/imgs/<path:filename>")
+def serve_imgs(filename):
+    return send_from_directory("imgs", filename)
+
+
 @app.route("/api/address-autocomplete")
 def address_autocomplete():
     if not _check_rate_limit(_client_key("autocomplete"), 30, 60):

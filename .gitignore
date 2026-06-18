@@ -22,3 +22,4 @@ env/
 test_accounts.py
 nuke_acct4.py
 *.png
+!imgs/*.png

@@ -1064,10 +1064,10 @@
 
     // ── Payment methods config — update handles here ───────────────────────────
     const PAYMENT_METHODS = [
-      { id: 'zelle',  name: 'Zelle',  desc: 'Instant bank transfer', color: '#6c1d9b', bg: '#1a0a2e', label: 'Send to', value: 'your@email.com' },
-      { id: 'venmo',  name: 'Venmo',  desc: 'Pay with Venmo',        color: '#3d95ce', bg: '#0a1a2e', label: 'Send to', value: '@YourVenmo' },
-      { id: 'chime',  name: 'Chime',  desc: 'Send via Chime',        color: '#73c04d', bg: '#0a1e0a', label: 'Send to', value: '$YourChime' },
-      { id: 'crypto', name: 'Crypto', desc: 'BTC / ETH / USDT',      color: '#f7931a', bg: '#2e1a00', label: 'Wallet',  value: 'YourWalletAddress' },
+      { id: 'zelle',  name: 'Zelle',  desc: 'Instant bank transfer', img: '/imgs/zelle.png',  label: 'Send to', value: 'your@email.com' },
+      { id: 'venmo',  name: 'Venmo',  desc: 'Pay with Venmo',        img: '/imgs/vemmo.png',  label: 'Send to', value: '@YourVenmo' },
+      { id: 'chime',  name: 'Chime',  desc: 'Send via Chime',        img: '/imgs/chime.png',  label: 'Send to', value: '$YourChime' },
+      { id: 'crypto', name: 'Crypto', desc: 'BTC / ETH / USDT',      img: '/imgs/crypto.png', label: 'Wallet',  value: 'YourWalletAddress' },
     ];
 
     let _depositAmount = 0;
@@ -1089,7 +1089,7 @@
         <div class="payment-method-list">
           ${PAYMENT_METHODS.map(m => `
             <div class="payment-method-card" onclick="selectPaymentMethod('${m.id}')">
-              <div class="pm-icon" style="background:${m.bg};color:${m.color}">${m.name.slice(0,2)}</div>
+              <div class="pm-icon"><img src="${m.img}" style="width:38px;height:38px;object-fit:contain;border-radius:8px;" /></div>
               <div class="pm-info">
                 <div class="pm-name">${m.name}</div>
                 <div class="pm-desc">${m.desc}</div>
