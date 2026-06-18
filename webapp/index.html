@@ -1308,7 +1308,7 @@
     const COINS = [
       { id: 'BTC', name: 'Bitcoin',  tag: 'BTC', img: _CDN + 'btc.svg', note: 'Confirmation may take up to 1 hour' },
       { id: 'ETH', name: 'Ethereum', tag: 'ETH', img: _CDN + 'eth.svg' },
-      { id: 'SOL', name: 'Solana',   tag: 'SOL', img: _CDN + 'sol.svg' },
+      { id: 'SOL', name: 'Solana',   tag: 'SOL', img: 'https://assets.coingecko.com/coins/images/4128/small/solana.png' },
       { id: 'LTC', name: 'Litecoin', tag: 'LTC', img: _CDN + 'ltc.svg' },
     ];
 
@@ -1412,8 +1412,10 @@
         </div>
         <div class="crypto-amount-card">
           <div class="crypto-amount-label">Send exactly</div>
-          <div class="crypto-amount-value">${esc(details.crypto_amount)} ${esc(details.pay_currency)}</div>
-          <button class="copy-btn" id="copy-amt-btn" onclick="copyAmount()" style="border-top:1px solid var(--border);margin-top:10px;">Copy Amount</button>
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:2px;">
+            <div class="crypto-amount-value">${esc(details.crypto_amount)} ${esc(details.pay_currency)}</div>
+            <button id="copy-amt-btn" onclick="copyAmount()" style="background:none;border:1px solid #2e2e2e;border-radius:6px;color:#555;font-size:10px;font-weight:600;padding:4px 9px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">Copy</button>
+          </div>
         </div>
         <div class="crypto-address-box">
           <div class="crypto-address-label">Wallet address</div>
