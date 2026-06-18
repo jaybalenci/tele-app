@@ -386,67 +386,47 @@ def deposit_crypto():
     if currency not in _SUPPORTED_CURRENCIES:
         return jsonify({"error": "Unsupported currency."}), 400
 
+    from core.logger import log as _log
+
     callback_url = f"{_WEBAPP_URL}/api/deposit/crypto/callback"
     payload = {
-        "merchant": _OXAPAY_KEY,
-        "amount": amount,
-        "currency": "USD",
-        "payCurrency": currency,
-        "lifeTime": 30,
+        "merchant":      _OXAPAY_KEY,
+        "amount":        amount,
+        "currency":      "USD",
+        "payCurrency":   currency,
+        "lifeTime":      30,
         "feePaidByPayer": 1,
-        "callbackUrl": callback_url,
-        "description": "Crave balance deposit",
+        "callbackUrl":   callback_url,
+        "description":   "Crave balance deposit",
     }
     try:
         req = _urllib_request.Request(
-            "https://api.oxapay.com/merchants/request",
+            "https://api.oxapay.com/merchants/request/whitelabel",
             data=_json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
         with _urllib_request.urlopen(req, timeout=15) as resp:
             result = _json.loads(resp.read())
+        _log("oxapay", f"whitelabel creation: {result}")
     except Exception as exc:
-        from core.logger import log as _log
-        _log("oxapay", f"invoice creation failed: {exc}")
+        _log("oxapay", f"whitelabel creation failed: {exc}")
         return jsonify({"error": "Could not create payment. Try again."}), 500
 
     if result.get("result") != 100:
+        _log("oxapay", f"whitelabel error: {result}")
         return jsonify({"error": result.get("message", "Payment creation failed.")}), 500
 
-    track_id = str(result["trackId"])
-    track_id_int = int(result["trackId"])
-    _store_pending_crypto(track_id, chat_id, amount)
-
-    # Fetch raw payment details via inquiry (retry up to 4x — address may take a moment)
-    import time as _time
-    from core.logger import log as _log
-    inq = {}
-    for attempt in range(4):
-        if attempt > 0:
-            _time.sleep(1.5)
-        try:
-            inq_req = _urllib_request.Request(
-                "https://api.oxapay.com/merchants/inquiry",
-                data=_json.dumps({"merchant": _OXAPAY_KEY, "trackId": track_id_int}).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with _urllib_request.urlopen(inq_req, timeout=10) as resp:
-                inq = _json.loads(resp.read())
-            _log("oxapay", f"inquiry attempt {attempt}: {inq}")
-            if inq.get("address"):
-                break
-        except Exception as exc:
-            _log("oxapay", f"inquiry attempt {attempt} failed: {exc}")
-
-    address      = inq.get("address") or inq.get("payAddress") or ""
-    crypto_amount = inq.get("payAmount") or inq.get("cryptoAmount") or ""
-    pay_currency = inq.get("payCurrency") or inq.get("cryptoCurrency") or currency
+    track_id     = str(result.get("trackId", ""))
+    address      = str(result.get("address") or "")
+    crypto_amount = str(result.get("payAmount") or "")
+    pay_currency = str(result.get("payCurrency") or currency)
 
     if not address:
-        _log("oxapay", f"inquiry gave no address after retries. full response: {inq}")
-        return jsonify({"error": "Payment address not ready. Please try again in a moment."}), 500
+        _log("oxapay", f"whitelabel gave no address. full response: {result}")
+        return jsonify({"error": "Payment address not available. Try again."}), 500
+
+    _store_pending_crypto(track_id, chat_id, amount)
 
     return jsonify({
         "address":       address,
