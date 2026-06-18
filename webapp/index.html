@@ -533,6 +533,69 @@
       line-height: 1.5;
     }
 
+    /* ── Deposit screen ── */
+    .deposit-balance-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .deposit-balance-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .deposit-balance-display {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      color: #fff;
+    }
+
+    .deposit-amount-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .deposit-currency {
+      font-size: 18px;
+      font-weight: 600;
+      color: #555;
+      flex-shrink: 0;
+    }
+
+    #input-deposit {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .deposit-max-hint {
+      font-size: 10px;
+      color: #2e2e2e;
+      margin-top: 5px;
+    }
+
+    .deposit-chips {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .deposit-chips .chip {
+      flex: 1;
+      padding: 10px 0;
+      font-size: 13px;
+    }
+
     /* ── Address autocomplete dropdown ── */
     #card-address { position: relative; overflow: visible; }
 
@@ -581,7 +644,7 @@
             <div class="balance-label">Balance</div>
             <div class="balance-amount">$0.00</div>
           </div>
-          <div class="balance-add" onclick="">+</div>
+          <div class="balance-add" onclick="openDeposit()">+</div>
         </div>
       </div>
       <div class="promo-banner">
@@ -639,6 +702,42 @@
       </div>
 
       <button class="submit-btn" id="submit-btn" onclick="submitForm()" disabled>Continue</button>
+    </div>
+  </div>
+
+  <!-- Deposit -->
+  <div class="screen" id="screen-deposit">
+    <header>
+      <div class="back-arrow" onclick="showScreen('screen-form')">&#8592;</div>
+      <div class="header-title">
+        <h1>Crave<span>.</span></h1>
+      </div>
+    </header>
+
+    <div class="form">
+      <div class="deposit-balance-card">
+        <div class="deposit-balance-label">Current Balance</div>
+        <div class="deposit-balance-display" id="deposit-balance-display">$0.00</div>
+      </div>
+
+      <div class="input-card" id="deposit-amount-card">
+        <div class="card-label">Deposit amount</div>
+        <div class="deposit-amount-row">
+          <span class="deposit-currency">$</span>
+          <input id="input-deposit" type="number" min="1" max="100" step="0.01" placeholder="0.00" autocomplete="off" oninput="onDepositInput()" />
+        </div>
+        <div class="deposit-max-hint">Max $100.00 per transaction</div>
+        <div class="error-text" id="deposit-error-text">Amount must be between $1 and $100</div>
+      </div>
+
+      <div class="deposit-chips">
+        <div class="chip" onclick="setDepositAmount(10)">$10</div>
+        <div class="chip" onclick="setDepositAmount(25)">$25</div>
+        <div class="chip" onclick="setDepositAmount(50)">$50</div>
+        <div class="chip" onclick="setDepositAmount(100)">$100</div>
+      </div>
+
+      <button class="submit-btn" id="deposit-btn" onclick="submitDeposit()" disabled>Deposit</button>
     </div>
   </div>
 
@@ -775,6 +874,94 @@
     tg.setBackgroundColor('#0e0e0e');
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     tg.onEvent('viewportChanged', () => { if (!tg.isExpanded) tg.expand(); });
+
+    // ── Balance (stored in Telegram CloudStorage) ──────────────────────────────
+    const BALANCE_KEY = 'crave_balance';
+
+    function getBalance(cb) {
+      if (tg.CloudStorage) {
+        tg.CloudStorage.getItem(BALANCE_KEY, (err, val) => cb(parseFloat(val) || 0));
+      } else {
+        cb(parseFloat(localStorage.getItem(BALANCE_KEY)) || 0);
+      }
+    }
+
+    function setBalance(amount, cb) {
+      const val = amount.toFixed(2);
+      if (tg.CloudStorage) {
+        tg.CloudStorage.setItem(BALANCE_KEY, val, () => cb && cb());
+      } else {
+        localStorage.setItem(BALANCE_KEY, val);
+        cb && cb();
+      }
+    }
+
+    function refreshBalanceDisplay() {
+      getBalance(bal => {
+        const fmt = '$' + bal.toFixed(2);
+        document.querySelector('.balance-amount').textContent = fmt;
+        const dd = document.getElementById('deposit-balance-display');
+        if (dd) dd.textContent = fmt;
+      });
+    }
+
+    refreshBalanceDisplay();
+
+    // ── Deposit screen ──────────────────────────────────────────────────────────
+    function openDeposit() {
+      refreshBalanceDisplay();
+      document.getElementById('input-deposit').value = '';
+      document.getElementById('deposit-btn').disabled = true;
+      document.getElementById('deposit-amount-card').classList.remove('error');
+      document.querySelectorAll('.deposit-chips .chip').forEach(c => c.classList.remove('active'));
+      showScreen('screen-deposit');
+    }
+
+    function setDepositAmount(val) {
+      document.getElementById('input-deposit').value = val;
+      document.querySelectorAll('.deposit-chips .chip').forEach(c =>
+        c.classList.toggle('active', parseFloat(c.textContent.replace('$','')) === val)
+      );
+      onDepositInput();
+    }
+
+    function onDepositInput() {
+      const input = document.getElementById('input-deposit');
+      const card  = document.getElementById('deposit-amount-card');
+      const btn   = document.getElementById('deposit-btn');
+      const val   = parseFloat(input.value);
+      const chips = document.querySelectorAll('.deposit-chips .chip');
+
+      chips.forEach(c => c.classList.toggle('active',
+        parseFloat(c.textContent.replace('$','')) === val
+      ));
+
+      if (!input.value || isNaN(val) || val <= 0 || val > 100) {
+        card.classList.toggle('error', !!input.value);
+        btn.disabled = true;
+      } else {
+        card.classList.remove('error');
+        btn.disabled = false;
+      }
+    }
+
+    function submitDeposit() {
+      const val = parseFloat(document.getElementById('input-deposit').value);
+      if (!val || val <= 0 || val > 100) return;
+      const btn = document.getElementById('deposit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+
+      // TODO: call payment backend here, then on success:
+      getBalance(current => {
+        const newBal = Math.round((current + val) * 100) / 100;
+        setBalance(newBal, () => {
+          refreshBalanceDisplay();
+          btn.textContent = 'Deposit';
+          showScreen('screen-form');
+        });
+      });
+    }
 
     function showScreen(id) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
