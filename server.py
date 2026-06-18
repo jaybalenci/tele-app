@@ -602,7 +602,12 @@ def telegram_webhook():
     if text.startswith("/start"):
         _tg_api("sendMessage", {
             "chat_id": chat_id,
-            "text": "Welcome to Crave! Tap the button below to open the app.",
+            "text": (
+                "🍔 Welcome! Ready to place an order?\n\n"
+                "Get the best price on your DoorDash group order — "
+                "40% off with free delivery, every time.\n\n"
+                "Tap below to get started:"
+            ),
             "reply_markup": {
                 "inline_keyboard": [[{
                     "text": "Open Crave",
