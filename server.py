@@ -126,6 +126,7 @@ def add_security_headers(resp):
         "font-src https://fonts.gstatic.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self'; "
+        "frame-src https://oxapay.com https://*.oxapay.com; "
         "frame-ancestors 'none';"
     )
     return resp
@@ -296,8 +297,68 @@ def price():
 
 # ── OxaPay crypto deposits ────────────────────────────────────────────────────
 _OXAPAY_KEY = os.getenv("OXAPAY_KEY", "")
-_pending_crypto: dict[str, dict] = {}   # trackId  → {chat_id, amount}
-_pending_credits: dict[int, float] = {} # chat_id  → amount to apply next open
+
+import sqlite3 as _sqlite3
+
+_DB_PATH = os.getenv("DB_PATH", "crave.db")
+
+
+def _db() -> _sqlite3.Connection:
+    con = _sqlite3.connect(_DB_PATH)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS pending_crypto (
+            track_id   TEXT PRIMARY KEY,
+            chat_id    INTEGER,
+            amount     REAL,
+            created_at REAL
+        )
+    """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS pending_credits (
+            chat_id INTEGER PRIMARY KEY,
+            amount  REAL
+        )
+    """)
+    con.commit()
+    return con
+
+
+def _store_pending_crypto(track_id: str, chat_id: int | None, amount: float) -> None:
+    with _db() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO pending_crypto VALUES (?,?,?,?)",
+            (track_id, chat_id, amount, _time.time()),
+        )
+
+
+def _pop_pending_crypto(track_id: str) -> dict | None:
+    with _db() as con:
+        row = con.execute(
+            "SELECT chat_id, amount FROM pending_crypto WHERE track_id=?", (track_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        con.execute("DELETE FROM pending_crypto WHERE track_id=?", (track_id,))
+    return {"chat_id": row[0], "amount": row[1]}
+
+
+def _add_pending_credit(chat_id: int, amount: float) -> None:
+    with _db() as con:
+        con.execute("""
+            INSERT INTO pending_credits (chat_id, amount) VALUES (?,?)
+            ON CONFLICT(chat_id) DO UPDATE SET amount = amount + excluded.amount
+        """, (chat_id, amount))
+
+
+def _pop_pending_credit(chat_id: int) -> float:
+    with _db() as con:
+        row = con.execute(
+            "SELECT amount FROM pending_credits WHERE chat_id=?", (chat_id,)
+        ).fetchone()
+        if row is None:
+            return 0.0
+        con.execute("DELETE FROM pending_credits WHERE chat_id=?", (chat_id,))
+    return round(row[0], 2)
 
 
 @app.route("/api/deposit/crypto", methods=["POST"])
@@ -349,13 +410,26 @@ def deposit_crypto():
         return jsonify({"error": result.get("message", "Payment creation failed.")}), 500
 
     track_id = str(result["trackId"])
-    _pending_crypto[track_id] = {"chat_id": chat_id, "amount": amount}
+    _store_pending_crypto(track_id, chat_id, amount)
 
     return jsonify({"payLink": result["payLink"], "trackId": track_id})
 
 
 @app.route("/api/deposit/crypto/callback", methods=["POST"])
 def deposit_crypto_callback():
+    # Verify OxaPay HMAC-SHA512 signature
+    raw_body = request.get_data()
+    hmac_header = request.headers.get("HMAC", "")
+    if _OXAPAY_KEY and hmac_header:
+        expected = hmac.new(_OXAPAY_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
+        if not hmac.compare_digest(expected.lower(), hmac_header.lower()):
+            from core.logger import log as _log
+            _log("oxapay", "webhook rejected — bad HMAC signature")
+            return "ok"
+    elif _OXAPAY_KEY and not hmac_header:
+        # No signature at all — reject
+        return "ok"
+
     data = request.get_json(force=True, silent=True) or {}
     status   = str(data.get("status") or "")
     track_id = str(data.get("trackId") or "")
@@ -363,7 +437,7 @@ def deposit_crypto_callback():
     if status != "Paid" or not track_id:
         return "ok"
 
-    pending = _pending_crypto.pop(track_id, None)
+    pending = _pop_pending_crypto(track_id)
     if not pending:
         return "ok"
 
@@ -371,9 +445,7 @@ def deposit_crypto_callback():
     amount  = pending["amount"]
 
     if chat_id:
-        _pending_credits[chat_id] = round(
-            _pending_credits.get(chat_id, 0) + amount, 2
-        )
+        _add_pending_credit(chat_id, amount)
         _tg_api("sendMessage", {
             "chat_id": chat_id,
             "text": f"Your deposit of ${amount:.2f} has been completed.",
@@ -392,8 +464,8 @@ def balance_pending():
     chat_id = _get_chat_id_from_init_data(init_data)
     if not chat_id:
         return jsonify({"pending": 0})
-    amount = _pending_credits.pop(chat_id, 0)
-    return jsonify({"pending": round(amount, 2)})
+    amount = _pop_pending_credit(chat_id)
+    return jsonify({"pending": amount})
 
 
 @app.route("/api/deposit", methods=["POST"])

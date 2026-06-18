@@ -596,6 +596,41 @@
       font-size: 13px;
     }
 
+    /* ── Crypto iframe screen ── */
+    #screen-crypto-pay {
+      flex-direction: column;
+    }
+
+    .crypto-pay-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .crypto-pay-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #ccc;
+    }
+
+    #crypto-pay-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #fff;
+    }
+
+    .crypto-pay-status {
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #444;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
     /* ── Payment method screen ── */
     .payment-amount-display {
       background: var(--card);
@@ -856,6 +891,16 @@
     <div class="form" id="payment-form">
       <!-- filled by JS -->
     </div>
+  </div>
+
+  <!-- Crypto embedded payment -->
+  <div class="screen" id="screen-crypto-pay">
+    <div class="crypto-pay-bar">
+      <div class="back-arrow" id="crypto-pay-close">&#8592;</div>
+      <span class="crypto-pay-title">Crypto Payment</span>
+    </div>
+    <iframe id="crypto-pay-frame" src="" allow="clipboard-write" allowpaymentrequest></iframe>
+    <div class="crypto-pay-status" id="crypto-pay-status">Waiting for payment...</div>
   </div>
 
   <!-- Loading -->
@@ -1122,7 +1167,6 @@
       document.getElementById('payment-back').onclick = renderPaymentMethods;
 
       if (id === 'crypto') {
-        // Hit backend to create OxaPay invoice
         const form = document.getElementById('payment-form');
         form.innerHTML = `
           <div class="payment-amount-display">
@@ -1134,6 +1178,7 @@
             <div style="font-size:13px;color:#555;">Creating payment...</div>
           </div>`;
 
+        let payLink = null;
         try {
           const res = await fetch('/api/deposit/crypto', {
             method: 'POST',
@@ -1141,25 +1186,11 @@
             body: JSON.stringify({ amount: _depositAmount }),
           });
           const data = await res.json();
-          if (!res.ok || data.error) {
-            renderPaymentMethods();
-            return;
-          }
-          tg.openLink(data.payLink);
-          // After they return, show a waiting state — webhook will fire in background
-          form.innerHTML = `
-            <div class="payment-amount-display">
-              <div class="payment-amount-label">Deposit amount</div>
-              <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
-            </div>
-            <div class="payment-detail-box">
-              <div class="payment-detail-method">Crypto — Awaiting Payment</div>
-              <div class="payment-note" style="margin-top:0">Complete the payment in your browser. Once confirmed you will receive a Telegram message and your balance will update automatically.</div>
-            </div>
-            <button class="submit-btn" onclick="showScreen('screen-form')">Back to Home</button>`;
-        } catch (_) {
-          renderPaymentMethods();
-        }
+          if (!res.ok || data.error) { renderPaymentMethods(); return; }
+          payLink = data.payLink;
+        } catch (_) { renderPaymentMethods(); return; }
+
+        openCryptoFrame(payLink);
         return;
       }
 
@@ -1182,6 +1213,51 @@
           <div class="payment-note">Send exactly $${_depositAmount.toFixed(2)} to the address above, then tap the button below once the payment is sent.</div>
         </div>
         <button class="submit-btn" onclick="confirmPayment()">I've Sent the Payment</button>`;
+    }
+
+    let _cryptoPollTimer = null;
+
+    function openCryptoFrame(payLink) {
+      const frame  = document.getElementById('crypto-pay-frame');
+      const status = document.getElementById('crypto-pay-status');
+      const close  = document.getElementById('crypto-pay-close');
+
+      frame.src = payLink;
+      status.textContent = 'Waiting for payment...';
+
+      // Try iframe first — if OxaPay blocks embedding, fall back to external link
+      frame.onerror = () => {
+        clearInterval(_cryptoPollTimer);
+        tg.openLink(payLink);
+        showScreen('screen-payment');
+      };
+
+      close.onclick = () => {
+        clearInterval(_cryptoPollTimer);
+        frame.src = '';
+        showScreen('screen-payment');
+      };
+
+      showScreen('screen-crypto-pay');
+
+      // Poll for webhook credit every 4 seconds
+      _cryptoPollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch('/api/balance/pending', { headers: { 'X-Telegram-Init-Data': INIT_DATA } });
+          const data = await res.json();
+          if (data.pending > 0) {
+            clearInterval(_cryptoPollTimer);
+            frame.src = '';
+            getBalance(current => {
+              setBalance(Math.round((current + data.pending) * 100) / 100, () => {
+                refreshBalanceDisplay();
+                status.textContent = `Payment confirmed — $${data.pending.toFixed(2)} added.`;
+                setTimeout(() => showScreen('screen-form'), 1500);
+              });
+            });
+          }
+        } catch (_) {}
+      }, 4000);
     }
 
     async function confirmPayment() {
