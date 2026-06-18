@@ -415,29 +415,45 @@ def deposit_crypto():
         return jsonify({"error": result.get("message", "Payment creation failed.")}), 500
 
     track_id = str(result["trackId"])
+    track_id_int = int(result["trackId"])
     _store_pending_crypto(track_id, chat_id, amount)
 
-    # Fetch raw payment details (address + crypto amount) via inquiry
-    try:
-        inq_req = _urllib_request.Request(
-            "https://api.oxapay.com/merchants/inquiry",
-            data=_json.dumps({"merchant": _OXAPAY_KEY, "trackId": track_id}).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with _urllib_request.urlopen(inq_req, timeout=10) as resp:
-            inq = _json.loads(resp.read())
-    except Exception as exc:
-        from core.logger import log as _log
-        _log("oxapay", f"inquiry failed: {exc}")
-        return jsonify({"error": "Could not fetch payment address. Try again."}), 500
+    # Fetch raw payment details via inquiry (retry up to 4x — address may take a moment)
+    import time as _time
+    from core.logger import log as _log
+    inq = {}
+    for attempt in range(4):
+        if attempt > 0:
+            _time.sleep(1.5)
+        try:
+            inq_req = _urllib_request.Request(
+                "https://api.oxapay.com/merchants/inquiry",
+                data=_json.dumps({"merchant": _OXAPAY_KEY, "trackId": track_id_int}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _urllib_request.urlopen(inq_req, timeout=10) as resp:
+                inq = _json.loads(resp.read())
+            _log("oxapay", f"inquiry attempt {attempt}: {inq}")
+            if inq.get("address"):
+                break
+        except Exception as exc:
+            _log("oxapay", f"inquiry attempt {attempt} failed: {exc}")
+
+    address      = inq.get("address") or inq.get("payAddress") or ""
+    crypto_amount = inq.get("payAmount") or inq.get("cryptoAmount") or ""
+    pay_currency = inq.get("payCurrency") or inq.get("cryptoCurrency") or currency
+
+    if not address:
+        _log("oxapay", f"inquiry gave no address after retries. full response: {inq}")
+        return jsonify({"error": "Payment address not ready. Please try again in a moment."}), 500
 
     return jsonify({
-        "address":      inq.get("address", ""),
-        "crypto_amount": inq.get("payAmount", ""),
-        "pay_currency": inq.get("payCurrency", currency),
-        "expires_in":   30 * 60,
-        "track_id":     track_id,
+        "address":       address,
+        "crypto_amount": crypto_amount,
+        "pay_currency":  pay_currency,
+        "expires_in":    30 * 60,
+        "track_id":      track_id,
     })
 
 
@@ -555,6 +571,21 @@ def _register_webhook() -> None:
     if not _BOT_TOKEN or not _WEBAPP_URL:
         return
     webhook_url = f"{_WEBAPP_URL}/telegram"
+    from core.logger import log as _log
+    try:
+        # Check current webhook first to avoid hitting the rate limit
+        check_req = _urllib_request.Request(
+            f"https://api.telegram.org/bot{_BOT_TOKEN}/getWebhookInfo",
+            method="GET",
+        )
+        with _urllib_request.urlopen(check_req, timeout=10) as r:
+            info = _json.loads(r.read()).get("result", {})
+        if info.get("url") == webhook_url:
+            _log("bot", f"webhook already set → {webhook_url}")
+            return
+    except Exception as exc:
+        _log("bot", f"getWebhookInfo failed: {exc}")
+
     try:
         req = _urllib_request.Request(
             f"https://api.telegram.org/bot{_BOT_TOKEN}/setWebhook",
@@ -567,10 +598,8 @@ def _register_webhook() -> None:
             method="POST",
         )
         _urllib_request.urlopen(req, timeout=10)
-        from core.logger import log as _log
         _log("bot", f"webhook registered → {webhook_url}")
     except Exception as exc:
-        from core.logger import log as _log
         _log("bot", f"webhook registration failed: {exc}")
 
 
