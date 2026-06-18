@@ -1024,6 +1024,23 @@
 
     refreshBalanceDisplay();
 
+    async function checkPendingCredit() {
+      try {
+        const res = await fetch('/api/balance/pending', {
+          headers: { 'X-Telegram-Init-Data': INIT_DATA },
+        });
+        const data = await res.json();
+        if (data.pending > 0) {
+          getBalance(current => {
+            setBalance(Math.round((current + data.pending) * 100) / 100, refreshBalanceDisplay);
+          });
+        }
+      } catch (_) {}
+    }
+
+    checkPendingCredit();
+    tg.onEvent('activated', checkPendingCredit);
+
     // ── Deposit screen ──────────────────────────────────────────────────────────
     function openDeposit() {
       refreshBalanceDisplay();
@@ -1099,10 +1116,53 @@
         </div>`;
     }
 
-    function selectPaymentMethod(id) {
+    async function selectPaymentMethod(id) {
       const m = PAYMENT_METHODS.find(x => x.id === id);
       if (!m) return;
       document.getElementById('payment-back').onclick = renderPaymentMethods;
+
+      if (id === 'crypto') {
+        // Hit backend to create OxaPay invoice
+        const form = document.getElementById('payment-form');
+        form.innerHTML = `
+          <div class="payment-amount-display">
+            <div class="payment-amount-label">Deposit amount</div>
+            <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;">
+            <div class="spinner"></div>
+            <div style="font-size:13px;color:#555;">Creating payment...</div>
+          </div>`;
+
+        try {
+          const res = await fetch('/api/deposit/crypto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
+            body: JSON.stringify({ amount: _depositAmount }),
+          });
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            renderPaymentMethods();
+            return;
+          }
+          tg.openLink(data.payLink);
+          // After they return, show a waiting state — webhook will fire in background
+          form.innerHTML = `
+            <div class="payment-amount-display">
+              <div class="payment-amount-label">Deposit amount</div>
+              <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
+            </div>
+            <div class="payment-detail-box">
+              <div class="payment-detail-method">Crypto — Awaiting Payment</div>
+              <div class="payment-note" style="margin-top:0">Complete the payment in your browser. Once confirmed you will receive a Telegram message and your balance will update automatically.</div>
+            </div>
+            <button class="submit-btn" onclick="showScreen('screen-form')">Back to Home</button>`;
+        } catch (_) {
+          renderPaymentMethods();
+        }
+        return;
+      }
+
       const form = document.getElementById('payment-form');
       form.innerHTML = `
         <div class="payment-amount-display">

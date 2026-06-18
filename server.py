@@ -294,6 +294,108 @@ def price():
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
+# ── OxaPay crypto deposits ────────────────────────────────────────────────────
+_OXAPAY_KEY = os.getenv("OXAPAY_KEY", "")
+_pending_crypto: dict[str, dict] = {}   # trackId  → {chat_id, amount}
+_pending_credits: dict[int, float] = {} # chat_id  → amount to apply next open
+
+
+@app.route("/api/deposit/crypto", methods=["POST"])
+def deposit_crypto():
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    if not _verify_telegram_init_data(init_data):
+        return jsonify({"error": "Unauthorized"}), 401
+    if not _check_rate_limit(_client_key("deposit"), 5, 60):
+        return jsonify({"error": "Too many requests."}), 429
+    if not _OXAPAY_KEY:
+        return jsonify({"error": "Crypto payments not configured."}), 500
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = round(float(data.get("amount") or 0), 2)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid amount."}), 400
+    if amount <= 0 or amount > 100:
+        return jsonify({"error": "Amount must be between $0.01 and $100.00."}), 400
+
+    chat_id = _get_chat_id_from_init_data(init_data)
+
+    callback_url = f"{_WEBAPP_URL}/api/deposit/crypto/callback"
+    payload = {
+        "merchant": _OXAPAY_KEY,
+        "amount": amount,
+        "currency": "USD",
+        "lifeTime": 30,
+        "feePaidByPayer": 1,
+        "callbackUrl": callback_url,
+        "returnUrl": f"{_WEBAPP_URL}/",
+        "description": "Crave balance deposit",
+    }
+    try:
+        req = _urllib_request.Request(
+            "https://api.oxapay.com/merchants/request",
+            data=_json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urllib_request.urlopen(req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+    except Exception as exc:
+        from core.logger import log as _log
+        _log("oxapay", f"invoice creation failed: {exc}")
+        return jsonify({"error": "Could not create payment. Try again."}), 500
+
+    if result.get("result") != 100:
+        return jsonify({"error": result.get("message", "Payment creation failed.")}), 500
+
+    track_id = str(result["trackId"])
+    _pending_crypto[track_id] = {"chat_id": chat_id, "amount": amount}
+
+    return jsonify({"payLink": result["payLink"], "trackId": track_id})
+
+
+@app.route("/api/deposit/crypto/callback", methods=["POST"])
+def deposit_crypto_callback():
+    data = request.get_json(force=True, silent=True) or {}
+    status   = str(data.get("status") or "")
+    track_id = str(data.get("trackId") or "")
+
+    if status != "Paid" or not track_id:
+        return "ok"
+
+    pending = _pending_crypto.pop(track_id, None)
+    if not pending:
+        return "ok"
+
+    chat_id = pending["chat_id"]
+    amount  = pending["amount"]
+
+    if chat_id:
+        _pending_credits[chat_id] = round(
+            _pending_credits.get(chat_id, 0) + amount, 2
+        )
+        _tg_api("sendMessage", {
+            "chat_id": chat_id,
+            "text": f"Your deposit of ${amount:.2f} has been completed.",
+        })
+
+    from core.logger import log as _log
+    _log("oxapay", f"payment confirmed: ${amount:.2f} for chat {chat_id}")
+    return "ok"
+
+
+@app.route("/api/balance/pending")
+def balance_pending():
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    if not _verify_telegram_init_data(init_data):
+        return jsonify({"pending": 0})
+    chat_id = _get_chat_id_from_init_data(init_data)
+    if not chat_id:
+        return jsonify({"pending": 0})
+    amount = _pending_credits.pop(chat_id, 0)
+    return jsonify({"pending": round(amount, 2)})
+
+
 @app.route("/api/deposit", methods=["POST"])
 def deposit():
     init_data = request.headers.get("X-Telegram-Init-Data", "")
