@@ -596,6 +596,109 @@
       font-size: 13px;
     }
 
+    /* ── Payment method screen ── */
+    .payment-amount-display {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .payment-amount-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .payment-amount-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+    }
+
+    .payment-method-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .payment-method-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.15s;
+    }
+
+    .payment-method-card:active { opacity: 0.7; }
+
+    .pm-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      flex-shrink: 0;
+      letter-spacing: -0.5px;
+    }
+
+    .pm-info { flex: 1; }
+    .pm-name { font-size: 14px; font-weight: 600; color: #ddd; }
+    .pm-desc { font-size: 11px; color: #444; margin-top: 2px; }
+    .pm-arrow { font-size: 16px; color: #333; }
+
+    /* Payment detail view */
+    .payment-detail-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      flex-shrink: 0;
+    }
+
+    .payment-detail-method {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .payment-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 13px;
+    }
+
+    .payment-detail-row:last-child { border-bottom: none; }
+    .payment-detail-row .label { color: #555; }
+    .payment-detail-row .value { color: #fff; font-weight: 600; font-family: monospace; font-size: 13px; }
+
+    .payment-note {
+      font-size: 11px;
+      color: #333;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+
     /* ── Address autocomplete dropdown ── */
     #card-address { position: relative; overflow: visible; }
 
@@ -738,6 +841,20 @@
       </div>
 
       <button class="submit-btn" id="deposit-btn" onclick="submitDeposit()" disabled>Deposit</button>
+    </div>
+  </div>
+
+  <!-- Payment Method -->
+  <div class="screen" id="screen-payment">
+    <header>
+      <div class="back-arrow" id="payment-back">&#8592;</div>
+      <div class="header-title">
+        <h1>Crave<span>.</span></h1>
+      </div>
+    </header>
+
+    <div class="form" id="payment-form">
+      <!-- filled by JS -->
     </div>
   </div>
 
@@ -945,22 +1062,104 @@
       }
     }
 
-    function submitDeposit() {
-      const val = parseFloat(document.getElementById('input-deposit').value);
-      if (!val || val <= 0 || val > 100) return;
-      const btn = document.getElementById('deposit-btn');
-      btn.disabled = true;
-      btn.textContent = 'Processing...';
+    // ── Payment methods config — update handles here ───────────────────────────
+    const PAYMENT_METHODS = [
+      { id: 'zelle',  name: 'Zelle',  desc: 'Instant bank transfer', color: '#6c1d9b', bg: '#1a0a2e', label: 'Send to', value: 'your@email.com' },
+      { id: 'venmo',  name: 'Venmo',  desc: 'Pay with Venmo',        color: '#3d95ce', bg: '#0a1a2e', label: 'Send to', value: '@YourVenmo' },
+      { id: 'chime',  name: 'Chime',  desc: 'Send via Chime',        color: '#73c04d', bg: '#0a1e0a', label: 'Send to', value: '$YourChime' },
+      { id: 'crypto', name: 'Crypto', desc: 'BTC / ETH / USDT',      color: '#f7931a', bg: '#2e1a00', label: 'Wallet',  value: 'YourWalletAddress' },
+    ];
 
-      // TODO: call payment backend here, then on success:
+    let _depositAmount = 0;
+
+    function openPaymentScreen(amount) {
+      _depositAmount = amount;
+      document.getElementById('payment-back').onclick = () => showScreen('screen-deposit');
+      renderPaymentMethods();
+      showScreen('screen-payment');
+    }
+
+    function renderPaymentMethods() {
+      const form = document.getElementById('payment-form');
+      form.innerHTML = `
+        <div class="payment-amount-display">
+          <div class="payment-amount-label">Deposit amount</div>
+          <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
+        </div>
+        <div class="payment-method-list">
+          ${PAYMENT_METHODS.map(m => `
+            <div class="payment-method-card" onclick="selectPaymentMethod('${m.id}')">
+              <div class="pm-icon" style="background:${m.bg};color:${m.color}">${m.name.slice(0,2)}</div>
+              <div class="pm-info">
+                <div class="pm-name">${m.name}</div>
+                <div class="pm-desc">${m.desc}</div>
+              </div>
+              <div class="pm-arrow">›</div>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    function selectPaymentMethod(id) {
+      const m = PAYMENT_METHODS.find(x => x.id === id);
+      if (!m) return;
+      document.getElementById('payment-back').onclick = renderPaymentMethods;
+      const form = document.getElementById('payment-form');
+      form.innerHTML = `
+        <div class="payment-amount-display">
+          <div class="payment-amount-label">Deposit amount</div>
+          <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
+        </div>
+        <div class="payment-detail-box">
+          <div class="payment-detail-method">${m.name}</div>
+          <div class="payment-detail-row">
+            <span class="label">${m.label}</span>
+            <span class="value">${m.value}</span>
+          </div>
+          <div class="payment-detail-row">
+            <span class="label">Amount</span>
+            <span class="value">$${_depositAmount.toFixed(2)}</span>
+          </div>
+          <div class="payment-note">Send exactly $${_depositAmount.toFixed(2)} to the address above, then tap the button below once the payment is sent.</div>
+        </div>
+        <button class="submit-btn" onclick="confirmPayment()">I've Sent the Payment</button>`;
+    }
+
+    async function confirmPayment() {
+      const btn = document.querySelector('#payment-form .submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Confirming...';
+
+      try {
+        const res = await fetch('/api/deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
+          body: JSON.stringify({ amount: _depositAmount }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          btn.disabled = false;
+          btn.textContent = "I've Sent the Payment";
+          return;
+        }
+      } catch (_) {
+        btn.disabled = false;
+        btn.textContent = "I've Sent the Payment";
+        return;
+      }
+
       getBalance(current => {
-        const newBal = Math.round((current + val) * 100) / 100;
+        const newBal = Math.round((current + _depositAmount) * 100) / 100;
         setBalance(newBal, () => {
           refreshBalanceDisplay();
-          btn.textContent = 'Deposit';
           showScreen('screen-form');
         });
       });
+    }
+
+    function submitDeposit() {
+      const val = parseFloat(document.getElementById('input-deposit').value);
+      if (!val || val <= 0 || val > 100) return;
+      openPaymentScreen(val);
     }
 
     function showScreen(id) {

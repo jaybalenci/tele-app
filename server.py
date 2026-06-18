@@ -52,6 +52,19 @@ _DISABLE_AUTH = os.getenv("DISABLE_AUTH", "0").strip() == "1"
 _MAX_INIT_DATA_AGE = 3600  # 1 hour
 
 
+def _get_chat_id_from_init_data(init_data: str) -> int | None:
+    """Extract the Telegram user ID (= DM chat_id) from validated initData."""
+    try:
+        vals = dict(parse_qsl(init_data, strict_parsing=False))
+        user_json = vals.get("user") or ""
+        if not user_json:
+            return None
+        import json as _j
+        return int(_j.loads(user_json).get("id") or 0) or None
+    except Exception:
+        return None
+
+
 def _verify_telegram_init_data(init_data: str) -> bool:
     """Validate Telegram WebApp initData HMAC so only real Telegram users can call the API."""
     if _DISABLE_AUTH:
@@ -274,6 +287,37 @@ def price():
         import traceback
         log("price", f"unexpected: {traceback.format_exc()}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.route("/api/deposit", methods=["POST"])
+def deposit():
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
+    if not _verify_telegram_init_data(init_data):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if not _check_rate_limit(_client_key("deposit"), 5, 60):
+        return jsonify({"error": "Too many requests."}), 429
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = float(data.get("amount") or 0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid amount."}), 400
+
+    if amount <= 0 or amount > 100:
+        return jsonify({"error": "Amount must be between $0.01 and $100.00."}), 400
+
+    chat_id = _get_chat_id_from_init_data(init_data)
+    if not chat_id and not _DISABLE_AUTH:
+        return jsonify({"error": "Could not identify user."}), 400
+
+    if chat_id:
+        _tg_api("sendMessage", {
+            "chat_id": chat_id,
+            "text": f"Your deposit of ${amount:.2f} has been completed.",
+        })
+
+    return jsonify({"ok": True})
 
 
 # ── Telegram bot (webhook mode) ───────────────────────────────────────────────
