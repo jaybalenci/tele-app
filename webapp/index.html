@@ -596,10 +596,8 @@
       font-size: 13px;
     }
 
-    /* ── Crypto iframe screen ── */
-    #screen-crypto-pay {
-      flex-direction: column;
-    }
+    /* ── Crypto native payment screen ── */
+    #screen-crypto-pay { flex-direction: column; }
 
     .crypto-pay-bar {
       display: flex;
@@ -610,26 +608,135 @@
       border-bottom: 1px solid var(--border);
     }
 
-    .crypto-pay-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: #ccc;
-    }
+    .crypto-pay-title { font-size: 15px; font-weight: 600; color: #ccc; }
 
-    #crypto-pay-frame {
+    #crypto-pay-content {
       flex: 1;
-      width: 100%;
-      border: none;
-      background: #fff;
+      overflow-y: auto;
+      padding: 16px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
     }
 
-    .crypto-pay-status {
-      padding: 10px 14px;
-      font-size: 12px;
-      color: #444;
-      text-align: center;
-      flex-shrink: 0;
+    /* Coin selection grid */
+    .coin-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
     }
+
+    .coin-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.15s;
+    }
+
+    .coin-card:active { opacity: 0.7; }
+
+    .coin-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+
+    .coin-name { font-size: 13px; font-weight: 600; color: #ddd; }
+    .coin-tag  { font-size: 10px; color: #555; }
+
+    /* QR + address */
+    .crypto-qr-wrap {
+      background: #fff;
+      border-radius: 14px;
+      padding: 12px;
+      display: inline-flex;
+    }
+
+    .crypto-amount-card {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .crypto-amount-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .crypto-amount-value {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+
+    .crypto-address-box {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .crypto-address-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: #333;
+      padding: 10px 13px 4px;
+    }
+
+    .crypto-address-value {
+      font-family: monospace;
+      font-size: 11px;
+      color: #aaa;
+      padding: 0 13px 10px;
+      word-break: break-all;
+      line-height: 1.6;
+    }
+
+    .copy-btn {
+      width: 100%;
+      background: #151515;
+      border: none;
+      border-top: 1px solid var(--border);
+      color: #555;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 11px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s;
+    }
+
+    .copy-btn:active { color: #fff; }
+
+    .crypto-countdown { font-size: 11px; color: #383838; }
+    .crypto-status-msg { font-size: 12px; color: #444; text-align: center; }
 
     /* ── Payment method screen ── */
     .payment-amount-display {
@@ -893,14 +1000,13 @@
     </div>
   </div>
 
-  <!-- Crypto embedded payment -->
+  <!-- Crypto native payment -->
   <div class="screen" id="screen-crypto-pay">
     <div class="crypto-pay-bar">
       <div class="back-arrow" id="crypto-pay-close">&#8592;</div>
-      <span class="crypto-pay-title">Crypto Payment</span>
+      <span class="crypto-pay-title" id="crypto-pay-title">Crypto Payment</span>
     </div>
-    <iframe id="crypto-pay-frame" src="" allow="clipboard-write" allowpaymentrequest></iframe>
-    <div class="crypto-pay-status" id="crypto-pay-status">Waiting for payment...</div>
+    <div id="crypto-pay-content"></div>
   </div>
 
   <!-- Loading -->
@@ -1161,7 +1267,14 @@
         </div>`;
     }
 
-    async function selectPaymentMethod(id) {
+    const COINS = [
+      { id: 'BTC',        name: 'Bitcoin',  symbol: 'BTC',   color: '#F7931A' },
+      { id: 'ETH',        name: 'Ethereum', symbol: 'ETH',   color: '#627EEA' },
+      { id: 'USDT_TRC20', name: 'USDT',     symbol: 'TRC20', color: '#26A17B' },
+      { id: 'LTC',        name: 'Litecoin', symbol: 'LTC',   color: '#A6A9AA' },
+    ];
+
+    function selectPaymentMethod(id) {
       const m = PAYMENT_METHODS.find(x => x.id === id);
       if (!m) return;
       document.getElementById('payment-back').onclick = renderPaymentMethods;
@@ -1173,24 +1286,15 @@
             <div class="payment-amount-label">Deposit amount</div>
             <div class="payment-amount-value">$${_depositAmount.toFixed(2)}</div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:10px;">
-            <div class="spinner"></div>
-            <div style="font-size:13px;color:#555;">Creating payment...</div>
+          <div class="section-title" style="align-self:flex-start;margin-top:4px;">Select Currency</div>
+          <div class="coin-grid">
+            ${COINS.map(c => `
+              <div class="coin-card" onclick="openNativeCryptoPayment('${c.id}')">
+                <div class="coin-icon" style="background:${c.color}">${c.symbol}</div>
+                <div class="coin-name">${c.name}</div>
+                <div class="coin-tag">${c.symbol}</div>
+              </div>`).join('')}
           </div>`;
-
-        let payLink = null;
-        try {
-          const res = await fetch('/api/deposit/crypto', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
-            body: JSON.stringify({ amount: _depositAmount }),
-          });
-          const data = await res.json();
-          if (!res.ok || data.error) { renderPaymentMethods(); return; }
-          payLink = data.payLink;
-        } catch (_) { renderPaymentMethods(); return; }
-
-        openCryptoFrame(payLink);
         return;
       }
 
@@ -1215,49 +1319,125 @@
         <button class="submit-btn" onclick="confirmPayment()">I've Sent the Payment</button>`;
     }
 
-    let _cryptoPollTimer = null;
+    let _cryptoPollTimer    = null;
+    let _cryptoCountdown    = null;
 
-    function openCryptoFrame(payLink) {
-      const frame  = document.getElementById('crypto-pay-frame');
-      const status = document.getElementById('crypto-pay-status');
-      const close  = document.getElementById('crypto-pay-close');
+    async function openNativeCryptoPayment(coinId) {
+      const coin    = COINS.find(c => c.id === coinId);
+      const content = document.getElementById('crypto-pay-content');
+      const titleEl = document.getElementById('crypto-pay-title');
+      const closeEl = document.getElementById('crypto-pay-close');
 
-      frame.src = payLink;
-      status.textContent = 'Waiting for payment...';
+      titleEl.textContent = (coin ? coin.name : 'Crypto') + ' Payment';
 
-      // Try iframe first — if OxaPay blocks embedding, fall back to external link
-      frame.onerror = () => {
+      content.innerHTML = `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:280px;width:100%;">
+          <div class="spinner"></div>
+          <div style="font-size:13px;color:#555;">Creating invoice...</div>
+        </div>`;
+
+      clearInterval(_cryptoPollTimer);
+      clearInterval(_cryptoCountdown);
+
+      closeEl.onclick = () => {
         clearInterval(_cryptoPollTimer);
-        tg.openLink(payLink);
-        showScreen('screen-payment');
-      };
-
-      close.onclick = () => {
-        clearInterval(_cryptoPollTimer);
-        frame.src = '';
+        clearInterval(_cryptoCountdown);
         showScreen('screen-payment');
       };
 
       showScreen('screen-crypto-pay');
 
-      // Poll for webhook credit every 4 seconds
+      let details;
+      try {
+        const res = await fetch('/api/deposit/crypto', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': INIT_DATA },
+          body: JSON.stringify({ amount: _depositAmount, currency: coinId }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          content.innerHTML = `<div class="error-banner" style="margin-top:20px;">${esc(data.error || 'Failed to create payment.')}</div>`;
+          return;
+        }
+        details = data;
+      } catch (_) {
+        content.innerHTML = `<div class="error-banner" style="margin-top:20px;">Network error. Please try again.</div>`;
+        return;
+      }
+
+      window._cryptoAddress = details.address;
+
+      const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='
+        + encodeURIComponent(details.address) + '&format=png&qzone=2';
+
+      content.innerHTML = `
+        <div class="crypto-qr-wrap">
+          <img src="${qrUrl}" width="180" height="180" alt="QR" />
+        </div>
+        <div class="crypto-amount-card">
+          <div class="crypto-amount-label">Send exactly</div>
+          <div class="crypto-amount-value">${esc(details.crypto_amount)} ${esc(details.pay_currency)}</div>
+        </div>
+        <div class="crypto-address-box">
+          <div class="crypto-address-label">Wallet address</div>
+          <div class="crypto-address-value">${esc(details.address)}</div>
+          <button class="copy-btn" id="copy-addr-btn" onclick="copyAddress()">Copy Address</button>
+        </div>
+        <div class="crypto-countdown" id="crypto-countdown"></div>
+        <div class="crypto-status-msg" id="crypto-status-msg">Waiting for payment confirmation...</div>
+      `;
+
+      // Countdown
+      let remaining = details.expires_in || 1800;
+      function tick() {
+        const el = document.getElementById('crypto-countdown');
+        if (!el) return;
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        el.textContent = 'Expires in ' + m + ':' + String(s).padStart(2, '0');
+        remaining--;
+        if (remaining < 0) clearInterval(_cryptoCountdown);
+      }
+      tick();
+      _cryptoCountdown = setInterval(tick, 1000);
+
+      // Poll for confirmation
       _cryptoPollTimer = setInterval(async () => {
         try {
           const res  = await fetch('/api/balance/pending', { headers: { 'X-Telegram-Init-Data': INIT_DATA } });
           const data = await res.json();
           if (data.pending > 0) {
             clearInterval(_cryptoPollTimer);
-            frame.src = '';
+            clearInterval(_cryptoCountdown);
+            const statusEl = document.getElementById('crypto-status-msg');
+            if (statusEl) statusEl.textContent = 'Payment confirmed!';
             getBalance(current => {
               setBalance(Math.round((current + data.pending) * 100) / 100, () => {
                 refreshBalanceDisplay();
-                status.textContent = `Payment confirmed — $${data.pending.toFixed(2)} added.`;
                 setTimeout(() => showScreen('screen-form'), 1500);
               });
             });
           }
         } catch (_) {}
       }, 4000);
+    }
+
+    function copyAddress() {
+      const addr = window._cryptoAddress;
+      if (!addr) return;
+      const btn = document.getElementById('copy-addr-btn');
+      navigator.clipboard.writeText(addr).then(() => {
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = 'Copy Address'; }, 2000); }
+      }).catch(() => {
+        // fallback: select text
+        const el = document.querySelector('.crypto-address-value');
+        if (el) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
+      });
     }
 
     async function confirmPayment() {

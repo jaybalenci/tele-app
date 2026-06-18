@@ -126,7 +126,7 @@ def add_security_headers(resp):
         "font-src https://fonts.gstatic.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self'; "
-        "frame-src https://oxapay.com https://*.oxapay.com; "
+        "frame-src 'none'; "
         "frame-ancestors 'none';"
     )
     return resp
@@ -381,15 +381,20 @@ def deposit_crypto():
 
     chat_id = _get_chat_id_from_init_data(init_data)
 
+    _SUPPORTED_CURRENCIES = {"BTC", "ETH", "LTC", "USDT_TRC20"}
+    currency = str(data.get("currency") or "BTC").upper().replace("-", "_")
+    if currency not in _SUPPORTED_CURRENCIES:
+        return jsonify({"error": "Unsupported currency."}), 400
+
     callback_url = f"{_WEBAPP_URL}/api/deposit/crypto/callback"
     payload = {
         "merchant": _OXAPAY_KEY,
         "amount": amount,
         "currency": "USD",
+        "payCurrency": currency,
         "lifeTime": 30,
         "feePaidByPayer": 1,
         "callbackUrl": callback_url,
-        "returnUrl": f"{_WEBAPP_URL}/",
         "description": "Crave balance deposit",
     }
     try:
@@ -412,7 +417,28 @@ def deposit_crypto():
     track_id = str(result["trackId"])
     _store_pending_crypto(track_id, chat_id, amount)
 
-    return jsonify({"payLink": result["payLink"], "trackId": track_id})
+    # Fetch raw payment details (address + crypto amount) via inquiry
+    try:
+        inq_req = _urllib_request.Request(
+            "https://api.oxapay.com/merchants/inquiry",
+            data=_json.dumps({"merchant": _OXAPAY_KEY, "trackId": track_id}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urllib_request.urlopen(inq_req, timeout=10) as resp:
+            inq = _json.loads(resp.read())
+    except Exception as exc:
+        from core.logger import log as _log
+        _log("oxapay", f"inquiry failed: {exc}")
+        return jsonify({"error": "Could not fetch payment address. Try again."}), 500
+
+    return jsonify({
+        "address":      inq.get("address", ""),
+        "crypto_amount": inq.get("payAmount", ""),
+        "pay_currency": inq.get("payCurrency", currency),
+        "expires_in":   30 * 60,
+        "track_id":     track_id,
+    })
 
 
 @app.route("/api/deposit/crypto/callback", methods=["POST"])
