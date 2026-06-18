@@ -1267,11 +1267,12 @@
         </div>`;
     }
 
+    const _CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/';
     const COINS = [
-      { id: 'BTC',        name: 'Bitcoin',  symbol: 'BTC',   color: '#F7931A' },
-      { id: 'ETH',        name: 'Ethereum', symbol: 'ETH',   color: '#627EEA' },
-      { id: 'USDT_TRC20', name: 'USDT',     symbol: 'TRC20', color: '#26A17B' },
-      { id: 'LTC',        name: 'Litecoin', symbol: 'LTC',   color: '#A6A9AA' },
+      { id: 'BTC',        name: 'Bitcoin',  symbol: 'BTC',   tag: 'BTC',   img: _CDN + 'btc.svg'  },
+      { id: 'ETH',        name: 'Ethereum', symbol: 'ETH',   tag: 'ETH',   img: _CDN + 'eth.svg'  },
+      { id: 'USDT_TRC20', name: 'USDT',     symbol: 'USDT',  tag: 'TRC20', img: _CDN + 'usdt.svg' },
+      { id: 'LTC',        name: 'Litecoin', symbol: 'LTC',   tag: 'LTC',   img: _CDN + 'ltc.svg'  },
     ];
 
     function selectPaymentMethod(id) {
@@ -1290,9 +1291,9 @@
           <div class="coin-grid">
             ${COINS.map(c => `
               <div class="coin-card" onclick="openNativeCryptoPayment('${c.id}')">
-                <div class="coin-icon" style="background:${c.color}">${c.symbol}</div>
+                <img src="${c.img}" width="44" height="44" style="border-radius:50%;" />
                 <div class="coin-name">${c.name}</div>
-                <div class="coin-tag">${c.symbol}</div>
+                <div class="coin-tag">${c.tag}</div>
               </div>`).join('')}
           </div>`;
         return;
@@ -1365,10 +1366,19 @@
         return;
       }
 
-      window._cryptoAddress = details.address;
+      window._cryptoAddress  = details.address;
+      window._cryptoAmount   = details.crypto_amount;
+      window._cryptoCurrency = details.pay_currency;
+
+      // Build a scannable crypto URI so wallets auto-fill both address and amount
+      const _uriScheme = { BTC: 'bitcoin', ETH: 'ethereum', LTC: 'litecoin' };
+      const _scheme = _uriScheme[details.pay_currency];
+      const _qrData = (_scheme && details.crypto_amount)
+        ? `${_scheme}:${details.address}?amount=${details.crypto_amount}`
+        : details.address;
 
       const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='
-        + encodeURIComponent(details.address) + '&format=png&qzone=2';
+        + encodeURIComponent(_qrData) + '&format=png&qzone=2';
 
       content.innerHTML = `
         <div class="crypto-qr-wrap">
@@ -1377,6 +1387,7 @@
         <div class="crypto-amount-card">
           <div class="crypto-amount-label">Send exactly</div>
           <div class="crypto-amount-value">${esc(details.crypto_amount)} ${esc(details.pay_currency)}</div>
+          <button class="copy-btn" id="copy-amt-btn" onclick="copyAmount()" style="border-top:1px solid var(--border);margin-top:10px;">Copy Amount</button>
         </div>
         <div class="crypto-address-box">
           <div class="crypto-address-label">Wallet address</div>
@@ -1422,22 +1433,28 @@
       }, 4000);
     }
 
-    function copyAddress() {
-      const addr = window._cryptoAddress;
-      if (!addr) return;
-      const btn = document.getElementById('copy-addr-btn');
-      navigator.clipboard.writeText(addr).then(() => {
-        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = 'Copy Address'; }, 2000); }
+    function _copyToClipboard(text, btnId, defaultLabel) {
+      const btn = document.getElementById(btnId);
+      navigator.clipboard.writeText(text).then(() => {
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = defaultLabel; }, 2000); }
       }).catch(() => {
-        // fallback: select text
-        const el = document.querySelector('.crypto-address-value');
-        if (el) {
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          window.getSelection().removeAllRanges();
-          window.getSelection().addRange(range);
-        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = defaultLabel; }, 2000); }
       });
+    }
+
+    function copyAddress() {
+      if (window._cryptoAddress) _copyToClipboard(window._cryptoAddress, 'copy-addr-btn', 'Copy Address');
+    }
+
+    function copyAmount() {
+      if (window._cryptoAmount) _copyToClipboard(window._cryptoAmount, 'copy-amt-btn', 'Copy Amount');
     }
 
     async function confirmPayment() {
